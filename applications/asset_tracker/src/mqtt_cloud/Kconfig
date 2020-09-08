@@ -18,8 +18,13 @@ config MQTT_CLOUD_STATIC_IPV4_ADDR
 	string "Static IPv4 address"
 	depends on MQTT_CLOUD_STATIC_IPV4
 
+config MQTT_CLOUD_TLS
+	bool "Enable TLS"
+	default y
+
 config MQTT_CLOUD_SEC_TAG
 	int "Security tag to use for MQTT Cloud connection"
+	depends on MQTT_CLOUD_TLS
 
 config MQTT_CLOUD_BROKER_HOST_NAME
 	string "MQTT Cloud server hostname"
@@ -91,6 +96,7 @@ config MQTT_CLOUD_PERSISTENT_SESSIONS
 
 config MQTT_CLOUD_TLS_SESSION_CACHING
 	bool "Enable TLS session caching"
+	depends on MQTT_CLOUD_TLS
 	default y
 
 module=MQTT_CLOUD
