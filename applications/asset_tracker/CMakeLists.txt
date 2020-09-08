@@ -27,6 +27,7 @@ zephyr_include_directories(src)
 zephyr_library_include_directories(
   src/orientation_detector
   src/ui
+  src/mqtt_cloud
   src/cloud_codec
   src/env_sensors
   src/light_sensor
@@ -36,6 +37,7 @@ zephyr_library_include_directories(
 # Application sources
 add_subdirectory(src/motion)
 add_subdirectory(src/ui)
+add_subdirectory(src/mqtt_cloud)
 add_subdirectory(src/cloud_codec)
 add_subdirectory(src/gps_controller)
 add_subdirectory(src/env_sensors)
