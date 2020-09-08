@@ -26,7 +26,7 @@ BUILD_ASSERT(sizeof(CONFIG_MQTT_CLOUD_BROKER_HOST_NAME) > 1,
 #define MQTT_AF_FAMILY AF_INET
 #endif
 
-#define MQTT_TOPIC "$aws/things/"
+#define MQTT_TOPIC "things/"
 #define MQTT_TOPIC_LEN (sizeof(MQTT_TOPIC))
 
 #define MQTT_CLIENT_ID_PREFIX "%s"
