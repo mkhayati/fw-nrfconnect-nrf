@@ -1,4 +1,4 @@
-#include <net/aws_iot.h>
+#include "mqtt_cloud.h"
 #include <net/mqtt.h>
 #include <net/socket.h>
 #include <net/cloud.h>
@@ -15,94 +15,94 @@
 
 #include <logging/log.h>
 
-LOG_MODULE_REGISTER(aws_iot, CONFIG_AWS_IOT_LOG_LEVEL);
+LOG_MODULE_REGISTER(mqtt_cloud, CONFIG_MQTT_CLOUD_LOG_LEVEL);
 
-BUILD_ASSERT(sizeof(CONFIG_AWS_IOT_BROKER_HOST_NAME) > 1,
-	    "AWS IoT hostname not set");
+BUILD_ASSERT(sizeof(CONFIG_MQTT_CLOUD_BROKER_HOST_NAME) > 1,
+	    "MQTT Cloud hostname not set");
 
-#if defined(CONFIG_AWS_IOT_IPV6)
-#define AWS_AF_FAMILY AF_INET6
+#if defined(CONFIG_MQTT_CLOUD_IPV6)
+#define MQTT_AF_FAMILY AF_INET6
 #else
-#define AWS_AF_FAMILY AF_INET
+#define MQTT_AF_FAMILY AF_INET
 #endif
 
-#define AWS_TOPIC "$aws/things/"
-#define AWS_TOPIC_LEN (sizeof(AWS_TOPIC))
+#define MQTT_TOPIC "$aws/things/"
+#define MQTT_TOPIC_LEN (sizeof(MQTT_TOPIC))
 
-#define AWS_CLIENT_ID_PREFIX "%s"
-#define AWS_CLIENT_ID_LEN_MAX CONFIG_AWS_IOT_CLIENT_ID_MAX_LEN
+#define MQTT_CLIENT_ID_PREFIX "%s"
+#define MQTT_CLIENT_ID_LEN_MAX CONFIG_MQTT_CLOUD_CLIENT_ID_MAX_LEN
 
-#define GET_TOPIC AWS_TOPIC "%s/shadow/get"
-#define GET_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 11)
+#define GET_TOPIC MQTT_TOPIC "%s/shadow/get"
+#define GET_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 11)
 
-#define UPDATE_TOPIC AWS_TOPIC "%s/shadow/update"
-#define UPDATE_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 14)
+#define UPDATE_TOPIC MQTT_TOPIC "%s/shadow/update"
+#define UPDATE_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 14)
 
-#define DELETE_TOPIC AWS_TOPIC "%s/shadow/delete"
-#define DELETE_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 14)
+#define DELETE_TOPIC MQTT_TOPIC "%s/shadow/delete"
+#define DELETE_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 14)
 
-static char client_id_buf[AWS_CLIENT_ID_LEN_MAX + 1];
+static char client_id_buf[MQTT_CLIENT_ID_LEN_MAX + 1];
 static char get_topic[GET_TOPIC_LEN + 1];
 static char update_topic[UPDATE_TOPIC_LEN + 1];
 static char delete_topic[DELETE_TOPIC_LEN + 1];
 
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE)
-#define UPDATE_ACCEPTED_TOPIC AWS_TOPIC "%s/shadow/update/accepted"
-#define UPDATE_ACCEPTED_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 23)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE)
+#define UPDATE_ACCEPTED_TOPIC MQTT_TOPIC "%s/shadow/update/accepted"
+#define UPDATE_ACCEPTED_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 23)
 static char update_accepted_topic[UPDATE_ACCEPTED_TOPIC_LEN + 1];
 #endif
 
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_REJECTED_SUBSCRIBE)
-#define UPDATE_REJECTED_TOPIC AWS_TOPIC "%s/shadow/update/rejected"
-#define UPDATE_REJECTED_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 23)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_REJECTED_SUBSCRIBE)
+#define UPDATE_REJECTED_TOPIC MQTT_TOPIC "%s/shadow/update/rejected"
+#define UPDATE_REJECTED_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 23)
 static char update_rejected_topic[UPDATE_REJECTED_TOPIC_LEN + 1];
 #endif
 
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_DELTA_SUBSCRIBE)
-#define UPDATE_DELTA_TOPIC AWS_TOPIC "%s/shadow/update/delta"
-#define UPDATE_DELTA_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 20)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_DELTA_SUBSCRIBE)
+#define UPDATE_DELTA_TOPIC MQTT_TOPIC "%s/shadow/update/delta"
+#define UPDATE_DELTA_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 20)
 static char update_delta_topic[UPDATE_DELTA_TOPIC_LEN + 1];
 #endif
 
-#if defined(CONFIG_AWS_IOT_TOPIC_GET_ACCEPTED_SUBSCRIBE)
-#define GET_ACCEPTED_TOPIC AWS_TOPIC "%s/shadow/get/accepted"
-#define GET_ACCEPTED_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 20)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_GET_ACCEPTED_SUBSCRIBE)
+#define GET_ACCEPTED_TOPIC MQTT_TOPIC "%s/shadow/get/accepted"
+#define GET_ACCEPTED_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 20)
 static char get_accepted_topic[GET_ACCEPTED_TOPIC_LEN + 1];
 #endif
 
-#if defined(CONFIG_AWS_IOT_TOPIC_GET_REJECTED_SUBSCRIBE)
-#define GET_REJECTED_TOPIC AWS_TOPIC "%s/shadow/get/rejected"
-#define GET_REJECTED_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 20)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_GET_REJECTED_SUBSCRIBE)
+#define GET_REJECTED_TOPIC MQTT_TOPIC "%s/shadow/get/rejected"
+#define GET_REJECTED_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 20)
 static char get_rejected_topic[GET_REJECTED_TOPIC_LEN + 1];
 #endif
 
-#if defined(CONFIG_AWS_IOT_TOPIC_DELETE_ACCEPTED_SUBSCRIBE)
-#define DELETE_ACCEPTED_TOPIC AWS_TOPIC "%s/shadow/delete/accepted"
-#define DELETE_ACCEPTED_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 23)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_DELETE_ACCEPTED_SUBSCRIBE)
+#define DELETE_ACCEPTED_TOPIC MQTT_TOPIC "%s/shadow/delete/accepted"
+#define DELETE_ACCEPTED_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 23)
 static char delete_accepted_topic[DELETE_ACCEPTED_TOPIC_LEN + 1];
 #endif
 
-#if defined(CONFIG_AWS_IOT_TOPIC_DELETE_REJECTED_SUBSCRIBE)
-#define DELETE_REJECTED_TOPIC AWS_TOPIC "%s/shadow/delete/rejected"
-#define DELETE_REJECTED_TOPIC_LEN (AWS_TOPIC_LEN + AWS_CLIENT_ID_LEN_MAX + 23)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_DELETE_REJECTED_SUBSCRIBE)
+#define DELETE_REJECTED_TOPIC MQTT_TOPIC "%s/shadow/delete/rejected"
+#define DELETE_REJECTED_TOPIC_LEN (MQTT_TOPIC_LEN + MQTT_CLIENT_ID_LEN_MAX + 23)
 static char delete_rejected_topic[DELETE_REJECTED_TOPIC_LEN + 1];
 #endif
 
 #if defined(CONFIG_CLOUD_API)
-static struct cloud_backend *aws_iot_backend;
+static struct cloud_backend *mqtt_cloud_backend;
 #endif
 
-#define AWS_IOT_POLL_TIMEOUT_MS 500
+#define MQTT_CLOUD_POLL_TIMEOUT_MS 500
 
-static struct aws_iot_app_topic_data app_topic_data;
+static struct mqtt_cloud_app_topic_data app_topic_data;
 static struct mqtt_client client;
 static struct sockaddr_storage broker;
 
-static char rx_buffer[CONFIG_AWS_IOT_MQTT_RX_TX_BUFFER_LEN];
-static char tx_buffer[CONFIG_AWS_IOT_MQTT_RX_TX_BUFFER_LEN];
-static char payload_buf[CONFIG_AWS_IOT_MQTT_PAYLOAD_BUFFER_LEN];
+static char rx_buffer[CONFIG_MQTT_CLOUD_MQTT_RX_TX_BUFFER_LEN];
+static char tx_buffer[CONFIG_MQTT_CLOUD_MQTT_RX_TX_BUFFER_LEN];
+static char payload_buf[CONFIG_MQTT_CLOUD_MQTT_PAYLOAD_BUFFER_LEN];
 
-static aws_iot_evt_handler_t module_evt_handler;
+static mqtt_cloud_evt_handler_t module_evt_handler;
 
 static atomic_t disconnect_requested;
 static atomic_t connection_poll_active;
@@ -134,31 +134,31 @@ static int connect_error_translate(const int err)
 	case -EINPROGRESS:
 		return CLOUD_CONNECT_RES_ERR_ALREADY_CONNECTED;
 	default:
-		LOG_ERR("AWS IoT backend connect failed %d", err);
+		LOG_ERR("MQTT Cloud backend connect failed %d", err);
 		return CLOUD_CONNECT_RES_ERR_MISC;
 #else
 	case 0:
-		return AWS_IOT_CONNECT_RES_SUCCESS;
+		return MQTT_CLOUD_CONNECT_RES_SUCCESS;
 	case -ECHILD:
-		return AWS_IOT_CONNECT_RES_ERR_NETWORK;
+		return MQTT_CLOUD_CONNECT_RES_ERR_NETWORK;
 	case -EACCES:
-		return AWS_IOT_CONNECT_RES_ERR_NOT_INITD;
+		return MQTT_CLOUD_CONNECT_RES_ERR_NOT_INITD;
 	case -ENOEXEC:
-		return AWS_IOT_CONNECT_RES_ERR_BACKEND;
+		return MQTT_CLOUD_CONNECT_RES_ERR_BACKEND;
 	case -EINVAL:
-		return AWS_IOT_CONNECT_RES_ERR_PRV_KEY;
+		return MQTT_CLOUD_CONNECT_RES_ERR_PRV_KEY;
 	case -EOPNOTSUPP:
-		return AWS_IOT_CONNECT_RES_ERR_CERT;
+		return MQTT_CLOUD_CONNECT_RES_ERR_CERT;
 	case -ECONNREFUSED:
-		return AWS_IOT_CONNECT_RES_ERR_CERT_MISC;
+		return MQTT_CLOUD_CONNECT_RES_ERR_CERT_MISC;
 	case -ETIMEDOUT:
-		return AWS_IOT_CONNECT_RES_ERR_TIMEOUT_NO_DATA;
+		return MQTT_CLOUD_CONNECT_RES_ERR_TIMEOUT_NO_DATA;
 	case -ENOMEM:
-		return AWS_IOT_CONNECT_RES_ERR_NO_MEM;
+		return MQTT_CLOUD_CONNECT_RES_ERR_NO_MEM;
 	case -EINPROGRESS:
-		return AWS_IOT_CONNECT_RES_ERR_ALREADY_CONNECTED;
+		return MQTT_CLOUD_CONNECT_RES_ERR_ALREADY_CONNECTED;
 	default:
-		LOG_ERR("AWS broker connect failed %d", err);
+		LOG_ERR("MQTT broker connect failed %d", err);
 		return CLOUD_CONNECT_RES_ERR_MISC;
 #endif /* !defined(CONFIG_CLOUD_API) */
 	}
@@ -168,31 +168,31 @@ static int connect_error_translate(const int err)
 static int api_connect_error_translate(const int err)
 {
 	switch (err) {
-	case AWS_IOT_DISCONNECT_USER_REQUEST:
+	case MQTT_CLOUD_DISCONNECT_USER_REQUEST:
 		return CLOUD_DISCONNECT_USER_REQUEST;
-	case AWS_IOT_DISCONNECT_CLOSED_BY_REMOTE:
+	case MQTT_CLOUD_DISCONNECT_CLOSED_BY_REMOTE:
 		return CLOUD_DISCONNECT_CLOSED_BY_REMOTE;
-	case AWS_IOT_DISCONNECT_INVALID_REQUEST:
+	case MQTT_CLOUD_DISCONNECT_INVALID_REQUEST:
 		return CLOUD_DISCONNECT_INVALID_REQUEST;
-	case AWS_IOT_DISCONNECT_MISC:
+	case MQTT_CLOUD_DISCONNECT_MISC:
 		return CLOUD_DISCONNECT_MISC;
-	case AWS_IOT_CONNECT_RES_ERR_NETWORK:
+	case MQTT_CLOUD_CONNECT_RES_ERR_NETWORK:
 		return CLOUD_CONNECT_RES_ERR_NETWORK;
-	case AWS_IOT_CONNECT_RES_ERR_NOT_INITD:
+	case MQTT_CLOUD_CONNECT_RES_ERR_NOT_INITD:
 		return CLOUD_CONNECT_RES_ERR_NOT_INITD;
-	case AWS_IOT_CONNECT_RES_ERR_BACKEND:
+	case MQTT_CLOUD_CONNECT_RES_ERR_BACKEND:
 		return CLOUD_CONNECT_RES_ERR_BACKEND;
-	case AWS_IOT_CONNECT_RES_ERR_PRV_KEY:
+	case MQTT_CLOUD_CONNECT_RES_ERR_PRV_KEY:
 		return CLOUD_CONNECT_RES_ERR_PRV_KEY;
-	case AWS_IOT_CONNECT_RES_ERR_CERT:
+	case MQTT_CLOUD_CONNECT_RES_ERR_CERT:
 		return CLOUD_CONNECT_RES_ERR_CERT;
-	case AWS_IOT_CONNECT_RES_ERR_CERT_MISC:
+	case MQTT_CLOUD_CONNECT_RES_ERR_CERT_MISC:
 		return CLOUD_CONNECT_RES_ERR_CERT_MISC;
-	case AWS_IOT_CONNECT_RES_ERR_TIMEOUT_NO_DATA:
+	case MQTT_CLOUD_CONNECT_RES_ERR_TIMEOUT_NO_DATA:
 		return CLOUD_CONNECT_RES_ERR_TIMEOUT_NO_DATA;
-	case AWS_IOT_CONNECT_RES_ERR_NO_MEM:
+	case MQTT_CLOUD_CONNECT_RES_ERR_NO_MEM:
 		return CLOUD_CONNECT_RES_ERR_NO_MEM;
-	case AWS_IOT_CONNECT_RES_ERR_ALREADY_CONNECTED:
+	case MQTT_CLOUD_CONNECT_RES_ERR_ALREADY_CONNECTED:
 		return CLOUD_CONNECT_RES_ERR_ALREADY_CONNECTED;
 	default:
 		LOG_ERR("Unknown error event %d", err);
@@ -201,72 +201,72 @@ static int api_connect_error_translate(const int err)
 }
 #endif /* defined(CONFIG_BSD_LIBRARY) */
 
-static void aws_iot_notify_event(const struct aws_iot_evt *aws_iot_evt)
+static void mqtt_cloud_notify_event(const struct mqtt_cloud_evt *mqtt_cloud_evt)
 {
 #if defined(CONFIG_CLOUD_API)
 
-	struct cloud_backend_config *config = aws_iot_backend->config;
+	struct cloud_backend_config *config = mqtt_cloud_backend->config;
 	struct cloud_event cloud_evt = { 0 };
 
-	switch (aws_iot_evt->type) {
-	case AWS_IOT_EVT_CONNECTING:
+	switch (mqtt_cloud_evt->type) {
+	case MQTT_CLOUD_EVT_CONNECTING:
 		cloud_evt.type = CLOUD_EVT_CONNECTING;
 		break;
-	case AWS_IOT_EVT_CONNECTED:
+	case MQTT_CLOUD_EVT_CONNECTED:
 		cloud_evt.data.persistent_session =
-				aws_iot_evt->data.persistent_session;
+				mqtt_cloud_evt->data.persistent_session;
 		cloud_evt.type = CLOUD_EVT_CONNECTED;
 		cloud_evt.data.err =
-		api_connect_error_translate(aws_iot_evt->data.err);
+		api_connect_error_translate(mqtt_cloud_evt->data.err);
 		break;
-	case AWS_IOT_EVT_READY:
+	case MQTT_CLOUD_EVT_READY:
 		cloud_evt.type = CLOUD_EVT_READY;
 		break;
-	case AWS_IOT_EVT_DISCONNECTED:
+	case MQTT_CLOUD_EVT_DISCONNECTED:
 		cloud_evt.type = CLOUD_EVT_DISCONNECTED;
 		cloud_evt.data.err =
-		api_connect_error_translate(aws_iot_evt->data.err);
+		api_connect_error_translate(mqtt_cloud_evt->data.err);
 		break;
-	case AWS_IOT_EVT_DATA_RECEIVED:
+	case MQTT_CLOUD_EVT_DATA_RECEIVED:
 		cloud_evt.type = CLOUD_EVT_DATA_RECEIVED;
-		cloud_evt.data.msg.buf = aws_iot_evt->data.msg.ptr;
-		cloud_evt.data.msg.len = aws_iot_evt->data.msg.len;
+		cloud_evt.data.msg.buf = mqtt_cloud_evt->data.msg.ptr;
+		cloud_evt.data.msg.len = mqtt_cloud_evt->data.msg.len;
 		cloud_evt.data.msg.endpoint.type = CLOUD_EP_TOPIC_MSG;
 		cloud_evt.data.msg.endpoint.str =
-				(char *)aws_iot_evt->data.msg.topic.str;
+				(char *)mqtt_cloud_evt->data.msg.topic.str;
 		cloud_evt.data.msg.endpoint.len =
-				aws_iot_evt->data.msg.topic.len;
+				mqtt_cloud_evt->data.msg.topic.len;
 		break;
-	case AWS_IOT_EVT_FOTA_START:
+	case MQTT_CLOUD_EVT_FOTA_START:
 		cloud_evt.type = CLOUD_EVT_FOTA_START;
 		break;
-	case AWS_IOT_EVT_FOTA_DONE:
+	case MQTT_CLOUD_EVT_FOTA_DONE:
 		cloud_evt.type = CLOUD_EVT_FOTA_DONE;
 		break;
-	case AWS_IOT_EVT_FOTA_ERASE_PENDING:
+	case MQTT_CLOUD_EVT_FOTA_ERASE_PENDING:
 		cloud_evt.type = CLOUD_EVT_FOTA_ERASE_PENDING;
 		break;
-	case AWS_IOT_EVT_FOTA_ERASE_DONE:
+	case MQTT_CLOUD_EVT_FOTA_ERASE_DONE:
 		cloud_evt.type = CLOUD_EVT_FOTA_ERASE_DONE;
 		break;
-	case AWS_IOT_EVT_ERROR:
-		cloud_evt.data.err = aws_iot_evt->data.err;
+	case MQTT_CLOUD_EVT_ERROR:
+		cloud_evt.data.err = mqtt_cloud_evt->data.err;
 		cloud_evt.type = CLOUD_EVT_ERROR;
 		break;
-	case AWS_IOT_EVT_FOTA_DL_PROGRESS:
+	case MQTT_CLOUD_EVT_FOTA_DL_PROGRESS:
 		cloud_evt.type = CLOUD_EVT_FOTA_DL_PROGRESS;
 		cloud_evt.data.fota_progress =
-				aws_iot_evt->data.fota_progress;
+				mqtt_cloud_evt->data.fota_progress;
 		break;
 	default:
-		LOG_ERR("Unknown AWS IoT event");
+		LOG_ERR("Unknown MQTT Cloud event");
 		break;
 	}
 
-	cloud_notify_event(aws_iot_backend, &cloud_evt, config->user_data);
+	cloud_notify_event(mqtt_cloud_backend, &cloud_evt, config->user_data);
 #else
-	if ((module_evt_handler != NULL) && (aws_iot_evt != NULL)) {
-		module_evt_handler(aws_iot_evt);
+	if ((module_evt_handler != NULL) && (mqtt_cloud_evt != NULL)) {
+		module_evt_handler(mqtt_cloud_evt);
 	} else {
 		LOG_ERR("Library event handler not registered, or empty event");
 	}
@@ -276,7 +276,7 @@ static void aws_iot_notify_event(const struct aws_iot_evt *aws_iot_evt)
 #if defined(CONFIG_AWS_FOTA)
 static void aws_fota_cb_handler(struct aws_fota_event *fota_evt)
 {
-	struct aws_iot_evt aws_iot_evt = { 0 };
+	struct mqtt_cloud_evt mqtt_cloud_evt = { 0 };
 
 	if (fota_evt == NULL) {
 		return;
@@ -285,44 +285,44 @@ static void aws_fota_cb_handler(struct aws_fota_event *fota_evt)
 	switch (fota_evt->id) {
 	case AWS_FOTA_EVT_START:
 		LOG_DBG("AWS_FOTA_EVT_START");
-		aws_iot_evt.type = AWS_IOT_EVT_FOTA_START;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_FOTA_START;
 		break;
 	case AWS_FOTA_EVT_DONE:
 		LOG_DBG("AWS_FOTA_EVT_DONE");
-		aws_iot_evt.type = AWS_IOT_EVT_FOTA_DONE;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_FOTA_DONE;
 		break;
 	case AWS_FOTA_EVT_ERASE_PENDING:
 		LOG_DBG("AWS_FOTA_EVT_ERASE_PENDING");
-		aws_iot_evt.type = AWS_IOT_EVT_FOTA_ERASE_PENDING;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_FOTA_ERASE_PENDING;
 		break;
 	case AWS_FOTA_EVT_ERASE_DONE:
 		LOG_DBG("AWS_FOTA_EVT_ERASE_DONE");
-		aws_iot_evt.type = AWS_IOT_EVT_FOTA_ERASE_DONE;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_FOTA_ERASE_DONE;
 		break;
 	case AWS_FOTA_EVT_ERROR:
 		LOG_ERR("AWS_FOTA_EVT_ERROR");
-		aws_iot_evt.type = AWS_IOT_EVT_ERROR;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_ERROR;
 		break;
 	case AWS_FOTA_EVT_DL_PROGRESS:
 		LOG_DBG("AWS_FOTA_EVT_DL_PROGRESS, (%d%%)",
 			fota_evt->dl.progress);
-		aws_iot_evt.type = AWS_IOT_EVT_FOTA_DL_PROGRESS;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_FOTA_DL_PROGRESS;
 		break;
 	default:
 		LOG_ERR("Unknown FOTA event");
 		return;
 	}
 
-	aws_iot_notify_event(&aws_iot_evt);
+	mqtt_cloud_notify_event(&mqtt_cloud_evt);
 }
 #endif
 
-static int aws_iot_topics_populate(char *const id, size_t id_len)
+static int mqtt_cloud_topics_populate(char *const id, size_t id_len)
 {
 	int err;
-#if defined(CONFIG_AWS_IOT_CLIENT_ID_APP)
+#if defined(CONFIG_MQTT_CLOUD_CLIENT_ID_APP)
 	err = snprintf(client_id_buf, sizeof(client_id_buf),
-		       AWS_CLIENT_ID_PREFIX, id);
+		       MQTT_CLIENT_ID_PREFIX, id);
 	if (err <= 0) {
 		return -EINVAL;
 	}
@@ -331,7 +331,7 @@ static int aws_iot_topics_populate(char *const id, size_t id_len)
 	}
 #else
 	err = snprintf(client_id_buf, sizeof(client_id_buf),
-		       AWS_CLIENT_ID_PREFIX, CONFIG_AWS_IOT_CLIENT_ID_STATIC);
+		       MQTT_CLIENT_ID_PREFIX, CONFIG_MQTT_CLOUD_CLIENT_ID_STATIC);
 	if (err <= 0) {
 		return -EINVAL;
 	}
@@ -357,49 +357,49 @@ static int aws_iot_topics_populate(char *const id, size_t id_len)
 		return -ENOMEM;
 	}
 
-#if defined(CONFIG_AWS_IOT_TOPIC_GET_ACCEPTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_GET_ACCEPTED_SUBSCRIBE)
 	err = snprintf(get_accepted_topic, sizeof(get_accepted_topic),
 		       GET_ACCEPTED_TOPIC, client_id_buf);
 	if (err >= GET_ACCEPTED_TOPIC_LEN) {
 		return -ENOMEM;
 	}
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_GET_REJECTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_GET_REJECTED_SUBSCRIBE)
 	err = snprintf(get_rejected_topic, sizeof(get_rejected_topic),
 		       GET_REJECTED_TOPIC, client_id_buf);
 	if (err >= GET_REJECTED_TOPIC_LEN) {
 		return -ENOMEM;
 	}
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE)
 	err = snprintf(update_accepted_topic, sizeof(update_accepted_topic),
 		       UPDATE_ACCEPTED_TOPIC, client_id_buf);
 	if (err >= UPDATE_ACCEPTED_TOPIC_LEN) {
 		return -ENOMEM;
 	}
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_REJECTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_REJECTED_SUBSCRIBE)
 	err = snprintf(update_rejected_topic, sizeof(update_rejected_topic),
 		       UPDATE_REJECTED_TOPIC, client_id_buf);
 	if (err >= UPDATE_REJECTED_TOPIC_LEN) {
 		return -ENOMEM;
 	}
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_DELTA_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_DELTA_SUBSCRIBE)
 	err = snprintf(update_delta_topic, sizeof(update_delta_topic),
 		       UPDATE_DELTA_TOPIC, client_id_buf);
 	if (err >= UPDATE_DELTA_TOPIC_LEN) {
 		return -ENOMEM;
 	}
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_DELETE_ACCEPTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_DELETE_ACCEPTED_SUBSCRIBE)
 	err = snprintf(delete_accepted_topic, sizeof(delete_accepted_topic),
 		       DELETE_ACCEPTED_TOPIC, client_id_buf);
 	if (err >= DELETE_ACCEPTED_TOPIC_LEN) {
 		return -ENOMEM;
 	}
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_DELETE_REJECTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_DELETE_REJECTED_SUBSCRIBE)
 	err = snprintf(delete_rejected_topic, sizeof(delete_rejected_topic),
 		       DELETE_REJECTED_TOPIC, client_id_buf);
 	if (err >= DELETE_REJECTED_TOPIC_LEN) {
@@ -412,8 +412,8 @@ static int aws_iot_topics_populate(char *const id, size_t id_len)
 static int topic_subscribe(void)
 {
 	int err;
-	const struct mqtt_topic aws_iot_rx_list[] = {
-#if defined(CONFIG_AWS_IOT_TOPIC_GET_ACCEPTED_SUBSCRIBE)
+	const struct mqtt_topic mqtt_cloud_rx_list[] = {
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_GET_ACCEPTED_SUBSCRIBE)
 		{
 			.topic = {
 				.utf8 = get_accepted_topic,
@@ -422,7 +422,7 @@ static int topic_subscribe(void)
 			.qos = MQTT_QOS_1_AT_LEAST_ONCE
 		},
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_GET_REJECTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_GET_REJECTED_SUBSCRIBE)
 		{
 			.topic = {
 				.utf8 = get_rejected_topic,
@@ -431,7 +431,7 @@ static int topic_subscribe(void)
 			.qos = MQTT_QOS_1_AT_LEAST_ONCE
 		},
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE)
 		{
 			.topic = {
 				.utf8 = update_accepted_topic,
@@ -440,7 +440,7 @@ static int topic_subscribe(void)
 			.qos = MQTT_QOS_1_AT_LEAST_ONCE
 		},
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_REJECTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_REJECTED_SUBSCRIBE)
 		{
 			.topic = {
 				.utf8 = update_rejected_topic,
@@ -449,7 +449,7 @@ static int topic_subscribe(void)
 			.qos = MQTT_QOS_1_AT_LEAST_ONCE
 		},
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_UPDATE_DELTA_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_UPDATE_DELTA_SUBSCRIBE)
 		{
 			.topic = {
 				.utf8 = update_delta_topic,
@@ -458,7 +458,7 @@ static int topic_subscribe(void)
 			.qos = MQTT_QOS_1_AT_LEAST_ONCE
 		},
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_DELETE_ACCEPTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_DELETE_ACCEPTED_SUBSCRIBE)
 		{
 			.topic = {
 				.utf8 = delete_accepted_topic,
@@ -467,7 +467,7 @@ static int topic_subscribe(void)
 			.qos = MQTT_QOS_1_AT_LEAST_ONCE
 		},
 #endif
-#if defined(CONFIG_AWS_IOT_TOPIC_DELETE_REJECTED_SUBSCRIBE)
+#if defined(CONFIG_MQTT_CLOUD_TOPIC_DELETE_REJECTED_SUBSCRIBE)
 		{
 			.topic = {
 				.utf8 = delete_rejected_topic,
@@ -496,21 +496,21 @@ static int topic_subscribe(void)
 		}
 	}
 
-	if (ARRAY_SIZE(aws_iot_rx_list) > 0) {
-		const struct mqtt_subscription_list aws_sub_list = {
-			.list = (struct mqtt_topic *)&aws_iot_rx_list,
-			.list_count = ARRAY_SIZE(aws_iot_rx_list),
+	if (ARRAY_SIZE(mqtt_cloud_rx_list) > 0) {
+		const struct mqtt_subscription_list mqtt_sub_list = {
+			.list = (struct mqtt_topic *)&mqtt_cloud_rx_list,
+			.list_count = ARRAY_SIZE(mqtt_cloud_rx_list),
 			.message_id = sys_rand32_get()
 		};
 
-		for (size_t i = 0; i < aws_sub_list.list_count; i++) {
-			LOG_DBG("Subscribing to AWS shadow topic: %s",
-				log_strdup(aws_sub_list.list[i].topic.utf8));
+		for (size_t i = 0; i < mqtt_sub_list.list_count; i++) {
+			LOG_DBG("Subscribing to MQTT shadow topic: %s",
+				log_strdup(mqtt_sub_list.list[i].topic.utf8));
 		}
 
-		err = mqtt_subscribe(&client, &aws_sub_list);
+		err = mqtt_subscribe(&client, &mqtt_sub_list);
 		if (err) {
-			LOG_ERR("AWS shadow topics subscribe, error: %d", err);
+			LOG_ERR("MQTT shadow topics subscribe, error: %d", err);
 		}
 	}
 
@@ -531,7 +531,7 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 			     const struct mqtt_evt *mqtt_evt)
 {
 	int err;
-	struct aws_iot_evt aws_iot_evt = { 0 };
+	struct mqtt_cloud_evt mqtt_cloud_evt = { 0 };
 
 #if defined(CONFIG_AWS_FOTA)
 	err = aws_fota_mqtt_evt_handler(c, mqtt_evt);
@@ -546,9 +546,9 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		err = mqtt_disconnect(c);
 		if (err) {
 			LOG_ERR("Could not disconnect: %d", err);
-			aws_iot_evt.type = AWS_IOT_EVT_ERROR;
-			aws_iot_evt.data.err = err;
-			aws_iot_notify_event(&aws_iot_evt);
+			mqtt_cloud_evt.type = MQTT_CLOUD_EVT_ERROR;
+			mqtt_cloud_evt.data.err = err;
+			mqtt_cloud_notify_event(&mqtt_cloud_evt);
 		}
 	}
 #endif
@@ -558,10 +558,10 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		if (mqtt_evt->param.connack.return_code) {
 			LOG_ERR("MQTT_EVT_CONNACK, error: %d",
 				mqtt_evt->param.connack.return_code);
-			aws_iot_evt.data.err =
+			mqtt_cloud_evt.data.err =
 				mqtt_evt->param.connack.return_code;
-			aws_iot_evt.type = AWS_IOT_EVT_ERROR;
-			aws_iot_notify_event(&aws_iot_evt);
+			mqtt_cloud_evt.type = MQTT_CLOUD_EVT_ERROR;
+			mqtt_cloud_notify_event(&mqtt_cloud_evt);
 			break;
 		}
 
@@ -571,17 +571,17 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 
 		LOG_DBG("MQTT client connected!");
 
-		aws_iot_evt.data.persistent_session =
+		mqtt_cloud_evt.data.persistent_session =
 				   mqtt_evt->param.connack.session_present_flag;
-		aws_iot_evt.type = AWS_IOT_EVT_CONNECTED;
-		aws_iot_notify_event(&aws_iot_evt);
-		aws_iot_evt.type = AWS_IOT_EVT_READY;
-		aws_iot_notify_event(&aws_iot_evt);
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_CONNECTED;
+		mqtt_cloud_notify_event(&mqtt_cloud_evt);
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_READY;
+		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 		break;
 	case MQTT_EVT_DISCONNECT:
 		LOG_DBG("MQTT_EVT_DISCONNECT: result = %d", mqtt_evt->result);
-		aws_iot_evt.type = AWS_IOT_EVT_DISCONNECTED;
-		aws_iot_notify_event(&aws_iot_evt);
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_DISCONNECTED;
+		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 		break;
 	case MQTT_EVT_PUBLISH: {
 		const struct mqtt_publish_param *p = &mqtt_evt->param.publish;
@@ -604,14 +604,14 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 			mqtt_publish_qos1_ack(c, &ack);
 		}
 
-		aws_iot_evt.type = AWS_IOT_EVT_DATA_RECEIVED;
-		aws_iot_evt.data.msg.ptr = payload_buf;
-		aws_iot_evt.data.msg.len = p->message.payload.len;
-		aws_iot_evt.data.msg.topic.type = AWS_IOT_SHADOW_TOPIC_UNKNOWN;
-		aws_iot_evt.data.msg.topic.str = p->message.topic.topic.utf8;
-		aws_iot_evt.data.msg.topic.len = p->message.topic.topic.size;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_DATA_RECEIVED;
+		mqtt_cloud_evt.data.msg.ptr = payload_buf;
+		mqtt_cloud_evt.data.msg.len = p->message.payload.len;
+		mqtt_cloud_evt.data.msg.topic.type = MQTT_CLOUD_SHADOW_TOPIC_UNKNOWN;
+		mqtt_cloud_evt.data.msg.topic.str = p->message.topic.topic.utf8;
+		mqtt_cloud_evt.data.msg.topic.len = p->message.topic.topic.size;
 
-		aws_iot_notify_event(&aws_iot_evt);
+		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 	} break;
 	case MQTT_EVT_PUBACK:
 		LOG_DBG("MQTT_EVT_PUBACK: id = %d result = %d",
@@ -638,29 +638,29 @@ static int certificates_provision(void)
 		return 0;
 	}
 
-	err = tls_credential_add(CONFIG_AWS_IOT_SEC_TAG,
+	err = tls_credential_add(CONFIG_MQTT_CLOUD_SEC_TAG,
 				 TLS_CREDENTIAL_CA_CERTIFICATE,
-				 AWS_IOT_CA_CERTIFICATE,
-				 sizeof(AWS_IOT_CA_CERTIFICATE));
+				 MQTT_CLOUD_CA_CERTIFICATE,
+				 sizeof(MQTT_CLOUD_CA_CERTIFICATE));
 	if (err < 0) {
 		LOG_ERR("Failed to register CA certificate: %d",
 			err);
 		return err;
 	}
 
-	err = tls_credential_add(CONFIG_AWS_IOT_SEC_TAG,
+	err = tls_credential_add(CONFIG_MQTT_CLOUD_SEC_TAG,
 				 TLS_CREDENTIAL_PRIVATE_KEY,
-				 AWS_IOT_CLIENT_PRIVATE_KEY,
-				 sizeof(AWS_IOT_CLIENT_PRIVATE_KEY));
+				 MQTT_CLOUD_CLIENT_PRIVATE_KEY,
+				 sizeof(MQTT_CLOUD_CLIENT_PRIVATE_KEY));
 	if (err < 0) {
 		LOG_ERR("Failed to register private key: %d", err);
 		return err;
 	}
 
-	err = tls_credential_add(CONFIG_AWS_IOT_SEC_TAG,
+	err = tls_credential_add(CONFIG_MQTT_CLOUD_SEC_TAG,
 				 TLS_CREDENTIAL_SERVER_CERTIFICATE,
-				 AWS_IOT_CLIENT_PUBLIC_CERTIFICATE,
-				 sizeof(AWS_IOT_CLIENT_PUBLIC_CERTIFICATE));
+				 MQTT_CLOUD_CLIENT_PUBLIC_CERTIFICATE,
+				 sizeof(MQTT_CLOUD_CLIENT_PUBLIC_CERTIFICATE));
 	if (err < 0) {
 		LOG_ERR("Failed to register public certificate: %d", err);
 		return err;
@@ -672,18 +672,18 @@ static int certificates_provision(void)
 }
 #endif /* !defined(CONFIG_BSD_LIBRARY) */
 
-#if defined(CONFIG_AWS_IOT_STATIC_IPV4)
+#if defined(CONFIG_MQTT_CLOUD_STATIC_IPV4)
 static int broker_init(void)
 {
 	struct sockaddr_in *broker4 =
 		((struct sockaddr_in *)&broker);
 
-	inet_pton(AF_INET, CONFIG_AWS_IOT_STATIC_IPV4_ADDR,
+	inet_pton(AF_INET, CONFIG_MQTT_CLOUD_STATIC_IPV4_ADDR,
 		  &broker->sin_addr);
 	broker4->sin_family = AF_INET;
-	broker4->sin_port = htons(CONFIG_AWS_IOT_PORT);
+	broker4->sin_port = htons(CONFIG_MQTT_CLOUD_PORT);
 
-	LOG_DBG("IPv4 Address %s", log_strdup(CONFIG_AWS_IOT_STATIC_IPV4_ADDR));
+	LOG_DBG("IPv4 Address %s", log_strdup(CONFIG_MQTT_CLOUD_STATIC_IPV4_ADDR));
 
 	return 0;
 }
@@ -694,11 +694,11 @@ static int broker_init(void)
 	struct addrinfo *result;
 	struct addrinfo *addr;
 	struct addrinfo hints = {
-		.ai_family = AWS_AF_FAMILY,
+		.ai_family = MQTT_AF_FAMILY,
 		.ai_socktype = SOCK_STREAM
 	};
 
-	err = getaddrinfo(CONFIG_AWS_IOT_BROKER_HOST_NAME,
+	err = getaddrinfo(CONFIG_MQTT_CLOUD_BROKER_HOST_NAME,
 			  NULL, &hints, &result);
 	if (err) {
 		LOG_ERR("getaddrinfo, error %d", err);
@@ -709,7 +709,7 @@ static int broker_init(void)
 
 	while (addr != NULL) {
 		if ((addr->ai_addrlen == sizeof(struct sockaddr_in)) &&
-		    (AWS_AF_FAMILY == AF_INET)) {
+		    (MQTT_AF_FAMILY == AF_INET)) {
 			struct sockaddr_in *broker4 =
 				((struct sockaddr_in *)&broker);
 			char ipv4_addr[NET_IPV4_ADDR_LEN];
@@ -718,14 +718,14 @@ static int broker_init(void)
 				((struct sockaddr_in *)addr->ai_addr)
 				->sin_addr.s_addr;
 			broker4->sin_family = AF_INET;
-			broker4->sin_port = htons(CONFIG_AWS_IOT_PORT);
+			broker4->sin_port = htons(CONFIG_MQTT_CLOUD_PORT);
 
 			inet_ntop(AF_INET, &broker4->sin_addr.s_addr, ipv4_addr,
 				  sizeof(ipv4_addr));
 			LOG_DBG("IPv4 Address found %s", log_strdup(ipv4_addr));
 			break;
 		} else if ((addr->ai_addrlen == sizeof(struct sockaddr_in6)) &&
-			   (AWS_AF_FAMILY == AF_INET6)) {
+			   (MQTT_AF_FAMILY == AF_INET6)) {
 			struct sockaddr_in6 *broker6 =
 				((struct sockaddr_in6 *)&broker);
 			char ipv6_addr[NET_IPV6_ADDR_LEN];
@@ -735,7 +735,7 @@ static int broker_init(void)
 			       ->sin6_addr.s6_addr,
 			       sizeof(struct in6_addr));
 			broker6->sin6_family = AF_INET6;
-			broker6->sin6_port = htons(CONFIG_AWS_IOT_PORT);
+			broker6->sin6_port = htons(CONFIG_MQTT_CLOUD_PORT);
 
 			inet_ntop(AF_INET6, &broker6->sin6_addr.s6_addr,
 				  ipv6_addr, sizeof(ipv6_addr));
@@ -756,7 +756,7 @@ static int broker_init(void)
 
 	return err;
 }
-#endif /* !defined(CONFIG_AWS_IOT_STATIC_IP) */
+#endif /* !defined(CONFIG_MQTT_CLOUD_STATIC_IP) */
 
 static int client_broker_init(struct mqtt_client *const client)
 {
@@ -782,11 +782,11 @@ static int client_broker_init(struct mqtt_client *const client)
 	client->tx_buf_size		= sizeof(tx_buffer);
 	client->transport.type		= MQTT_TRANSPORT_SECURE;
 
-#if defined(CONFIG_AWS_IOT_PERSISTENT_SESSIONS)
+#if defined(CONFIG_MQTT_CLOUD_PERSISTENT_SESSIONS)
 	client->clean_session		= 0U;
 #endif
 
-	static sec_tag_t sec_tag_list[] = { CONFIG_AWS_IOT_SEC_TAG };
+	static sec_tag_t sec_tag_list[] = { CONFIG_MQTT_CLOUD_SEC_TAG };
 	struct mqtt_sec_config *tls_cfg = &(client->transport).tls.config;
 
 	tls_cfg->peer_verify		= 2;
@@ -794,11 +794,11 @@ static int client_broker_init(struct mqtt_client *const client)
 	tls_cfg->cipher_list		= NULL;
 	tls_cfg->sec_tag_count		= ARRAY_SIZE(sec_tag_list);
 	tls_cfg->sec_tag_list		= sec_tag_list;
-	tls_cfg->hostname		= CONFIG_AWS_IOT_BROKER_HOST_NAME;
+	tls_cfg->hostname		= CONFIG_MQTT_CLOUD_BROKER_HOST_NAME;
 
 #if defined(CONFIG_BSD_LIBRARY)
 	tls_cfg->session_cache		=
-		IS_ENABLED(CONFIG_AWS_IOT_TLS_SESSION_CACHING) ?
+		IS_ENABLED(CONFIG_MQTT_CLOUD_TLS_SESSION_CACHING) ?
 			TLS_SESSION_CACHE_ENABLED : TLS_SESSION_CACHE_DISABLED;
 #else
 	/* TLS session caching is not supported by the Zephyr network stack */
@@ -827,24 +827,24 @@ static int connection_poll_start(void)
 	return 0;
 }
 
-int aws_iot_ping(void)
+int mqtt_cloud_ping(void)
 {
 	return mqtt_ping(&client);
 }
 
-int aws_iot_keepalive_time_left(void)
+int mqtt_cloud_keepalive_time_left(void)
 {
 	return (int)mqtt_keepalive_time_left(&client);
 }
 
-int aws_iot_input(void)
+int mqtt_cloud_input(void)
 {
 	return mqtt_input(&client);
 }
 
-int aws_iot_send(const struct aws_iot_data *const tx_data)
+int mqtt_cloud_send(const struct mqtt_cloud_data *const tx_data)
 {
-	struct aws_iot_data tx_data_pub = {
+	struct mqtt_cloud_data tx_data_pub = {
 		.ptr	    = tx_data->ptr,
 		.len	    = tx_data->len,
 		.qos	    = tx_data->qos,
@@ -868,15 +868,15 @@ int aws_iot_send(const struct aws_iot_data *const tx_data)
 		tx_data_pub.topic.len = strlen(delete_topic);
 		break;
 #else
-	case AWS_IOT_SHADOW_TOPIC_GET:
+	case MQTT_CLOUD_SHADOW_TOPIC_GET:
 		tx_data_pub.topic.str = get_topic;
 		tx_data_pub.topic.len = strlen(get_topic);
 		break;
-	case AWS_IOT_SHADOW_TOPIC_UPDATE:
+	case MQTT_CLOUD_SHADOW_TOPIC_UPDATE:
 		tx_data_pub.topic.str = update_topic;
 		tx_data_pub.topic.len = strlen(update_topic);
 		break;
-	case AWS_IOT_SHADOW_TOPIC_DELETE:
+	case MQTT_CLOUD_SHADOW_TOPIC_DELETE:
 		tx_data_pub.topic.str = delete_topic;
 		tx_data_pub.topic.len = strlen(delete_topic);
 		break;
@@ -907,17 +907,17 @@ int aws_iot_send(const struct aws_iot_data *const tx_data)
 	return mqtt_publish(&client, &param);
 }
 
-int aws_iot_disconnect(void)
+int mqtt_cloud_disconnect(void)
 {
 	atomic_set(&disconnect_requested, 1);
 	return mqtt_disconnect(&client);
 }
 
-int aws_iot_connect(struct aws_iot_config *const config)
+int mqtt_cloud_connect(struct mqtt_cloud_config *const config)
 {
 	int err;
 
-	if (IS_ENABLED(CONFIG_AWS_IOT_CONNECTION_POLL_THREAD)) {
+	if (IS_ENABLED(CONFIG_MQTT_CLOUD_CONNECTION_POLL_THREAD)) {
 		err = connection_poll_start();
 	} else {
 		atomic_set(&disconnect_requested, 0);
@@ -941,8 +941,8 @@ int aws_iot_connect(struct aws_iot_config *const config)
 	return err;
 }
 
-int aws_iot_subscription_topics_add(
-			const struct aws_iot_topic_data *const topic_list,
+int mqtt_cloud_subscription_topics_add(
+			const struct mqtt_cloud_topic_data *const topic_list,
 			size_t list_count)
 {
 	if (list_count == 0) {
@@ -950,7 +950,7 @@ int aws_iot_subscription_topics_add(
 		return -EMSGSIZE;
 	}
 
-	if (list_count != CONFIG_AWS_IOT_APP_SUBSCRIPTION_LIST_COUNT) {
+	if (list_count != CONFIG_MQTT_CLOUD_APP_SUBSCRIPTION_LIST_COUNT) {
 		LOG_ERR("Application subscription list count mismatch");
 		return -EMSGSIZE;
 	}
@@ -966,26 +966,26 @@ int aws_iot_subscription_topics_add(
 	return 0;
 }
 
-int aws_iot_init(const struct aws_iot_config *const config,
-		 aws_iot_evt_handler_t event_handler)
+int mqtt_cloud_init(const struct mqtt_cloud_config *const config,
+		 mqtt_cloud_evt_handler_t event_handler)
 {
 	int err;
 
-	if (IS_ENABLED(CONFIG_AWS_IOT_CLIENT_ID_APP) &&
-	    config->client_id_len >= CONFIG_AWS_IOT_CLIENT_ID_MAX_LEN) {
+	if (IS_ENABLED(CONFIG_MQTT_CLOUD_CLIENT_ID_APP) &&
+	    config->client_id_len >= CONFIG_MQTT_CLOUD_CLIENT_ID_MAX_LEN) {
 		LOG_ERR("Client ID string too long");
 		return -EMSGSIZE;
 	}
 
-	if (IS_ENABLED(CONFIG_AWS_IOT_CLIENT_ID_APP) &&
+	if (IS_ENABLED(CONFIG_MQTT_CLOUD_CLIENT_ID_APP) &&
 	    config->client_id == NULL) {
 		LOG_ERR("Client ID not set in the application");
 		return -ENODATA;
 	}
 
-	err = aws_iot_topics_populate(config->client_id, config->client_id_len);
+	err = mqtt_cloud_topics_populate(config->client_id, config->client_id_len);
 	if (err) {
-		LOG_ERR("aws_topics_populate, error: %d", err);
+		LOG_ERR("mqtt_topics_populate, error: %d", err);
 		return err;
 	}
 
@@ -1002,23 +1002,23 @@ int aws_iot_init(const struct aws_iot_config *const config,
 	return err;
 }
 
-#if defined(CONFIG_AWS_IOT_CONNECTION_POLL_THREAD)
-void aws_iot_cloud_poll(void)
+#if defined(CONFIG_MQTT_CLOUD_CONNECTION_POLL_THREAD)
+void mqtt_cloud_cloud_poll(void)
 {
 	int err;
 	struct pollfd fds[1];
-	struct aws_iot_evt aws_iot_evt = {
-		.type = AWS_IOT_EVT_DISCONNECTED,
-		.data = { .err = AWS_IOT_DISCONNECT_MISC}
+	struct mqtt_cloud_evt mqtt_cloud_evt = {
+		.type = MQTT_CLOUD_EVT_DISCONNECTED,
+		.data = { .err = MQTT_CLOUD_DISCONNECT_MISC}
 	};
 
 start:
 	k_sem_take(&connection_poll_sem, K_FOREVER);
 	atomic_set(&connection_poll_active, 1);
 
-	aws_iot_evt.data.err = AWS_IOT_CONNECT_RES_SUCCESS;
-	aws_iot_evt.type = AWS_IOT_EVT_CONNECTING;
-	aws_iot_notify_event(&aws_iot_evt);
+	mqtt_cloud_evt.data.err = MQTT_CLOUD_CONNECT_RES_SUCCESS;
+	mqtt_cloud_evt.type = MQTT_CLOUD_EVT_CONNECTING;
+	mqtt_cloud_notify_event(&mqtt_cloud_evt);
 
 	err = client_broker_init(&client);
 	if (err) {
@@ -1032,77 +1032,77 @@ start:
 
 	err = connect_error_translate(err);
 
-	if (err != AWS_IOT_CONNECT_RES_SUCCESS) {
-		aws_iot_evt.data.err = err;
-		aws_iot_evt.type = AWS_IOT_EVT_CONNECTING;
-		aws_iot_notify_event(&aws_iot_evt);
+	if (err != MQTT_CLOUD_CONNECT_RES_SUCCESS) {
+		mqtt_cloud_evt.data.err = err;
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_CONNECTING;
+		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 		goto reset;
 	} else {
-		LOG_DBG("AWS broker connection request sent.");
+		LOG_DBG("MQTT broker connection request sent.");
 	}
 
 	fds[0].fd = client.transport.tls.sock;
 	fds[0].events = POLLIN;
 
-	aws_iot_evt.type = AWS_IOT_EVT_DISCONNECTED;
+	mqtt_cloud_evt.type = MQTT_CLOUD_EVT_DISCONNECTED;
 
 	while (true) {
-		err = poll(fds, ARRAY_SIZE(fds), AWS_IOT_POLL_TIMEOUT_MS);
+		err = poll(fds, ARRAY_SIZE(fds), MQTT_CLOUD_POLL_TIMEOUT_MS);
 
 		if (err == 0) {
-			if (aws_iot_keepalive_time_left() <
-			    AWS_IOT_POLL_TIMEOUT_MS) {
-				aws_iot_ping();
+			if (mqtt_cloud_keepalive_time_left() <
+			    MQTT_CLOUD_POLL_TIMEOUT_MS) {
+				mqtt_cloud_ping();
 			}
 			continue;
 		}
 
 		if ((fds[0].revents & POLLIN) == POLLIN) {
-			aws_iot_input();
+			mqtt_cloud_input();
 			continue;
 		}
 
 		if (err < 0) {
 			LOG_ERR("poll() returned an error: %d", err);
-			aws_iot_evt.data.err = AWS_IOT_DISCONNECT_MISC;
+			mqtt_cloud_evt.data.err = MQTT_CLOUD_DISCONNECT_MISC;
 			break;
 		}
 
 		if (atomic_get(&disconnect_requested)) {
 			atomic_set(&disconnect_requested, 0);
 			LOG_DBG("Expected disconnect event.");
-			aws_iot_evt.data.err = AWS_IOT_DISCONNECT_MISC;
-			aws_iot_notify_event(&aws_iot_evt);
+			mqtt_cloud_evt.data.err = MQTT_CLOUD_DISCONNECT_MISC;
+			mqtt_cloud_notify_event(&mqtt_cloud_evt);
 			goto reset;
 		}
 
 		if ((fds[0].revents & POLLNVAL) == POLLNVAL) {
 			LOG_DBG("Socket error: POLLNVAL");
 			LOG_DBG("The cloud socket was unexpectedly closed.");
-			aws_iot_evt.data.err =
-					AWS_IOT_DISCONNECT_INVALID_REQUEST;
+			mqtt_cloud_evt.data.err =
+					MQTT_CLOUD_DISCONNECT_INVALID_REQUEST;
 			break;
 		}
 
 		if ((fds[0].revents & POLLHUP) == POLLHUP) {
 			LOG_DBG("Socket error: POLLHUP");
 			LOG_DBG("Connection was closed by the cloud.");
-			aws_iot_evt.data.err =
-					AWS_IOT_DISCONNECT_CLOSED_BY_REMOTE;
+			mqtt_cloud_evt.data.err =
+					MQTT_CLOUD_DISCONNECT_CLOSED_BY_REMOTE;
 			break;
 		}
 
 		if ((fds[0].revents & POLLERR) == POLLERR) {
 			LOG_DBG("Socket error: POLLERR");
 			LOG_DBG("Cloud connection was unexpectedly closed.");
-			aws_iot_evt.data.err = AWS_IOT_DISCONNECT_MISC;
+			mqtt_cloud_evt.data.err = MQTT_CLOUD_DISCONNECT_MISC;
 			break;
 		}
 	}
 
 
-	aws_iot_notify_event(&aws_iot_evt);
-	aws_iot_disconnect();
+	mqtt_cloud_notify_event(&mqtt_cloud_evt);
+	mqtt_cloud_disconnect();
 
 reset:
 	atomic_set(&connection_poll_active, 0);
@@ -1114,9 +1114,9 @@ reset:
 #define POLL_THREAD_STACK_SIZE 4096
 #else
 #define POLL_THREAD_STACK_SIZE 2560
-#endif /* defined(CONFIG_AWS_IOT_CONNECTION_POLL_THREAD) */
+#endif /* defined(CONFIG_MQTT_CLOUD_CONNECTION_POLL_THREAD) */
 K_THREAD_DEFINE(connection_poll_thread, POLL_THREAD_STACK_SIZE,
-		aws_iot_cloud_poll, NULL, NULL, NULL,
+		mqtt_cloud_cloud_poll, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 #endif
 
@@ -1125,48 +1125,48 @@ static int api_init(const struct cloud_backend *const backend,
 		    cloud_evt_handler_t handler)
 {
 	backend->config->handler = handler;
-	aws_iot_backend = (struct cloud_backend *)backend;
+	mqtt_cloud_backend = (struct cloud_backend *)backend;
 
-	struct aws_iot_config config = {
+	struct mqtt_cloud_config config = {
 		.client_id = backend->config->id,
 		.client_id_len = backend->config->id_len
 	};
 
-	return aws_iot_init(&config, NULL);
+	return mqtt_cloud_init(&config, NULL);
 }
 
 static int api_ep_subscriptions_add(const struct cloud_backend *const backend,
 				    const struct cloud_endpoint *const list,
 				    size_t list_count)
 {
-	struct aws_iot_topic_data topic_list[list_count];
+	struct mqtt_cloud_topic_data topic_list[list_count];
 
 	for (size_t i = 0; i < list_count; i++) {
 		topic_list[i].str = list[i].str;
 		topic_list[i].len = list[i].len;
 	}
 
-	return aws_iot_subscription_topics_add(topic_list, list_count);
+	return mqtt_cloud_subscription_topics_add(topic_list, list_count);
 }
 
 static int api_connect(const struct cloud_backend *const backend)
 {
-	struct aws_iot_config config = {
+	struct mqtt_cloud_config config = {
 		.socket = backend->config->socket
 	};
 
-	return aws_iot_connect(&config);
+	return mqtt_cloud_connect(&config);
 }
 
 static int api_disconnect(const struct cloud_backend *const backend)
 {
-	return aws_iot_disconnect();
+	return mqtt_cloud_disconnect();
 }
 
 static int api_send(const struct cloud_backend *const backend,
 		    const struct cloud_msg *const msg)
 {
-	struct aws_iot_data tx_data = {
+	struct mqtt_cloud_data tx_data = {
 		.ptr = msg->buf,
 		.len = msg->len,
 		.qos = msg->qos,
@@ -1175,25 +1175,25 @@ static int api_send(const struct cloud_backend *const backend,
 		.topic.type = msg->endpoint.type
 	};
 
-	return aws_iot_send(&tx_data);
+	return mqtt_cloud_send(&tx_data);
 }
 
 static int api_input(const struct cloud_backend *const backend)
 {
-	return aws_iot_input();
+	return mqtt_cloud_input();
 }
 
 static int api_ping(const struct cloud_backend *const backend)
 {
-	return aws_iot_ping();
+	return mqtt_cloud_ping();
 }
 
 static int api_keepalive_time_left(const struct cloud_backend *const backend)
 {
-	return aws_iot_keepalive_time_left();
+	return mqtt_cloud_keepalive_time_left();
 }
 
-static const struct cloud_api aws_iot_api = {
+static const struct cloud_api mqtt_cloud_api = {
 	.init			= api_init,
 	.ep_subscriptions_add	= api_ep_subscriptions_add,
 	.connect		= api_connect,
@@ -1204,5 +1204,5 @@ static const struct cloud_api aws_iot_api = {
 	.keepalive_time_left	= api_keepalive_time_left
 };
 
-CLOUD_BACKEND_DEFINE(AWS_IOT, aws_iot_api);
+CLOUD_BACKEND_DEFINE(MQTT_CLOUD, mqtt_cloud_api);
 #endif /* defined(CONFIG_CLOUD_API) */
