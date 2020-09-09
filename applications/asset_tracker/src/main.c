@@ -38,6 +38,7 @@
 #include "env_sensors.h"
 #include "motion.h"
 #include "ui.h"
+#include "buzzer.h"
 #include "service_info.h"
 #include <modem/at_cmd.h>
 #include "watchdog.h"
@@ -892,6 +893,11 @@ static void cloud_cmd_handler(struct cloud_command *cmd)
 		ui_led_set_color(((uint32_t)cmd->data.sv.value >> 16) & 0xFF,
 				 ((uint32_t)cmd->data.sv.value >> 8) & 0xFF,
 				 ((uint32_t)cmd->data.sv.value) & 0xFF);
+	} else if ((cmd->channel == CLOUD_CHANNEL_BUZZER) &&
+		   (cmd->group == CLOUD_CMD_GROUP_CFG_SET) &&
+		   (cmd->type == CLOUD_CMD_FREQUENCY)) {
+		ui_buzzer_set_frequency(
+			(uint32_t)cmd->data.sv.value, 100);
 	} else if ((cmd->group == CLOUD_CMD_GROUP_CFG_SET) &&
 			   (cmd->type == CLOUD_CMD_INTERVAL)) {
 		if (cmd->channel == CLOUD_CHANNEL_LIGHT_SENSOR) {
@@ -1662,6 +1668,10 @@ static void sensors_init(void)
 		LOG_ERR("Light sensor init failed, error: %d", err);
 	}
 #endif /* CONFIG_LIGHT_SENSOR */
+	err = ui_buzzer_init();
+	if (err) {
+		LOG_ERR("Buzzer init failed, error: %d", err);
+	}
 #if CONFIG_MODEM_INFO
 	modem_data_init();
 #endif /* CONFIG_MODEM_INFO */
