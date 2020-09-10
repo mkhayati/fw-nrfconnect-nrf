@@ -65,6 +65,12 @@ static struct env_sensor air_quality_sensor = {
 	},
 };
 
+static struct env_sensor co2_equivalent_sensor = {
+	.sensor =  {
+		.type = ENV_SENSOR_CO2_EQUIVALENT,
+	},
+};
+
 /* size of stack area used by bsec thread */
 #define STACKSIZE 4096
 
@@ -167,6 +173,9 @@ static void output_ready(int64_t timestamp, float iaq, uint8_t iaq_accuracy,
 	key = k_spin_lock(&(air_quality_sensor.lock));
 	air_quality_sensor.sensor.value = iaq;
 	k_spin_unlock(&(air_quality_sensor.lock), key);
+	key = k_spin_lock(&(co2_equivalent_sensor.lock));
+	co2_equivalent_sensor.sensor.value = co2_equivalent;
+	k_spin_unlock(&(co2_equivalent_sensor.lock), key);
 }
 
 static uint32_t state_load(uint8_t *state_buffer, uint32_t n_buffer)
@@ -247,6 +256,19 @@ int env_sensors_get_air_quality(env_sensor_data_t *sensor_data)
 	return 0;
 }
 
+int env_sensors_get_co2_equivalent(env_sensor_data_t *sensor_data)
+{
+	if (sensor_data == NULL) {
+		return -1;
+	}
+	k_spinlock_key_t key = k_spin_lock(&co2_equivalent_sensor.lock);
+
+	memcpy(sensor_data, &co2_equivalent_sensor.sensor,
+		sizeof(co2_equivalent_sensor.sensor));
+	k_spin_unlock(&co2_equivalent_sensor.lock, key);
+	return 0;
+}
+
 static inline int submit_poll_work(const uint32_t delay_s)
 {
 	return k_delayed_work_submit_to_queue(env_sensors_work_q,
@@ -272,6 +294,37 @@ static void env_sensors_poll_fn(struct k_work *work)
 
 	submit_poll_work(backoff_enabled ?
 		CONFIG_ENVIRONMENT_DATA_BACKOFF_TIME : data_send_interval_s);
+}
+
+static int update_subscription(float sample_rate)
+{
+    bsec_sensor_configuration_t requested_virtual_sensors[] = {
+		{ .sensor_id = BSEC_OUTPUT_IAQ,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_RAW_PRESSURE,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_RAW_GAS,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_RAW_TEMPERATURE,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_RAW_HUMIDITY,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_STATIC_IAQ,
+		  .sample_rate = sample_rate },
+		{ .sensor_id = BSEC_OUTPUT_CO2_EQUIVALENT,
+		  .sample_rate = sample_rate }
+	};
+
+    bsec_sensor_configuration_t required_sensor_settings[BSEC_MAX_PHYSICAL_SENSOR];
+    uint8_t n_required_sensor_settings = BSEC_MAX_PHYSICAL_SENSOR;
+
+    return bsec_update_subscription(
+		requested_virtual_sensors, ARRAY_SIZE(requested_virtual_sensors),
+		required_sensor_settings, &n_required_sensor_settings);
 }
 
 int env_sensors_init_and_start(struct k_work_q *work_q,
@@ -304,6 +357,7 @@ int env_sensors_init_and_start(struct k_work_q *work_q,
 		/* Could not initialize BSEC library */
 		return (int)bsec_ret.bsec_status;
 	}
+	update_subscription(BSEC_SAMPLE_RATE);
 
 	k_thread_create(&thread, thread_stack, STACKSIZE,
 			(k_thread_entry_t)bsec_thread, NULL, NULL, NULL,

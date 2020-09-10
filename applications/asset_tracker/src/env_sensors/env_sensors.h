@@ -37,6 +37,7 @@ typedef enum {
 	ENV_SENSOR_AIR_PRESSURE,
 	/** The Air Quality sensor. */
 	ENV_SENSOR_AIR_QUALITY,
+	ENV_SENSOR_CO2_EQUIVALENT,
 } env_sensor_t;
 
 typedef struct {
@@ -83,6 +84,7 @@ int env_sensors_get_pressure(env_sensor_data_t *sensor_data);
  * @return 0 if the operation was successful, otherwise a (negative) error code.
  */
 int env_sensors_get_air_quality(env_sensor_data_t *sensor_data);
+int env_sensors_get_co2_equivalent(env_sensor_data_t *sensor_data);
 
 /**
  * @brief Initialize and start the environmental sensors.

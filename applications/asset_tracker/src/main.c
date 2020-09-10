@@ -1179,6 +1179,18 @@ static void env_data_send(void)
 		}
 	}
 
+	if (env_sensors_get_co2_equivalent(&env_data) == 0) {
+		if (cloud_is_send_allowed(CLOUD_CHANNEL_CO2_EQUIV,
+					  env_data.value) &&
+		    cloud_encode_env_sensors_data(&env_data, &msg) == 0) {
+			err = cloud_send(cloud_backend, &msg);
+			cloud_release_data(&msg);
+			if (err) {
+				goto error;
+			}
+		}
+	}
+
 	return;
 error:
 	LOG_ERR("sensor_data_send failed: %d", err);
