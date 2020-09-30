@@ -429,6 +429,9 @@ int cloud_encode_motion_data(const motion_data_t *motion_data,
 	case MOTION_ORIENTATION_UPSIDE_DOWN:
 		cloud_sensor.data.buf = "UPSIDE_DOWN";
 		break;
+	case MOTION_ORIENTATION_ON_SIDE:
+		cloud_sensor.data.buf = "ON_SIDE";
+		break;
 	default:
 		return -1;
 	}
