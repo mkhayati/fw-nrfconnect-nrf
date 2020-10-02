@@ -761,6 +761,10 @@ static int broker_init(void)
 static int client_broker_init(struct mqtt_client *const client)
 {
 	int err;
+#if defined(CONFIG_MQTT_CLOUD_AUTH)
+	static struct mqtt_utf8 password;
+	static struct mqtt_utf8 username;
+#endif
 
 	mqtt_client_init(client);
 
@@ -773,8 +777,20 @@ static int client_broker_init(struct mqtt_client *const client)
 	client->evt_cb			= mqtt_evt_handler;
 	client->client_id.utf8		= (char *)client_id_buf;
 	client->client_id.size		= strlen(client_id_buf);
+#if defined(CONFIG_MQTT_CLOUD_AUTH)
+	password.utf8			= (char *)CONFIG_MQTT_CLOUD_PASSWORD;
+	password.size			= strlen(CONFIG_MQTT_CLOUD_PASSWORD);
+	client->password 		= &password;
+#else
 	client->password		= NULL;
+#endif
+#if defined(CONFIG_MQTT_CLOUD_AUTH)
+	username.utf8 			= (char *)CONFIG_MQTT_CLOUD_USERNAME;
+	username.size 			= strlen(CONFIG_MQTT_CLOUD_USERNAME);
+	client->user_name		= &username;
+#else
 	client->user_name		= NULL;
+#endif
 	client->protocol_version	= MQTT_VERSION_3_1_1;
 	client->rx_buf			= rx_buffer;
 	client->rx_buf_size		= sizeof(rx_buffer);
