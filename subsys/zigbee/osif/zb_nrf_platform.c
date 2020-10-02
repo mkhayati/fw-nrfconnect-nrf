@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <kernel.h>
+#include <power/reboot.h>
 #include <logging/log.h>
 #include <init.h>
 
@@ -251,9 +252,6 @@ static int zigbee_init(struct device *unused)
 {
 	ARG_UNUSED(unused);
 
-	zb_ieee_addr_t ieee_addr;
-	zb_uint32_t channel_mask;
-
 	/* Initialise work queue for processing app callback and alarms. */
 	k_work_init(&zb_app_cb_work, zb_app_cb_process_schedule);
 
@@ -264,10 +262,12 @@ static int zigbee_init(struct device *unused)
 	ZB_SET_TRAF_DUMP_OFF();
 #endif /* ZB_TRACE_LEVEL */
 
+#ifndef CONFIG_ZB_TEST_MODE
 	/* Initialize Zigbee stack. */
 	ZB_INIT("zigbee_thread");
 
 	/* Set device address to the value read from FICR registers. */
+	zb_ieee_addr_t ieee_addr;
 	zb_osif_get_ieee_eui64(ieee_addr);
 	zb_set_long_address(ieee_addr);
 
@@ -280,9 +280,9 @@ static int zigbee_init(struct device *unused)
 	 * to create a new network
 	 */
 #if defined(CONFIG_ZIGBEE_CHANNEL_SELECTION_MODE_SINGLE)
-	channel_mask = (1UL << CONFIG_ZIGBEE_CHANNEL);
+	zb_uint32_t channel_mask = (1UL << CONFIG_ZIGBEE_CHANNEL);
 #elif defined(CONFIG_ZIGBEE_CHANNEL_SELECTION_MODE_MULTI)
-	channel_mask = CONFIG_ZIGBEE_CHANNEL_MASK;
+	zb_uint32_t channel_mask = CONFIG_ZIGBEE_CHANNEL_MASK;
 #else
 #error Channel mask undefined!
 #endif
@@ -296,6 +296,8 @@ static int zigbee_init(struct device *unused)
 #else
 #error Zigbee device role undefined!
 #endif
+
+#endif /* CONFIG_ZB_TEST_MODE */
 
 	return 0;
 }
@@ -491,8 +493,12 @@ void zb_reset(zb_uint8_t param)
 {
 	ZVUNUSED(param);
 
-	LOG_ERR("Fatal error occurred");
-	k_fatal_halt(K_ERR_KERNEL_PANIC);
+	sys_reboot(SYS_REBOOT_COLD);
+}
+
+zb_bool_t zb_osif_is_inside_isr(void)
+{
+	return (zb_bool_t)(__get_IPSR() != 0);
 }
 
 void zb_osif_enable_all_inter(void)
@@ -500,11 +506,6 @@ void zb_osif_enable_all_inter(void)
 	__ASSERT(zb_osif_is_inside_isr() == 0,
 		 "Unable to unlock mutex from interrupt context");
 	k_mutex_unlock(&zigbee_mutex);
-}
-
-zb_bool_t zb_osif_is_inside_isr(void)
-{
-	return (zb_bool_t)(__get_IPSR() != 0);
 }
 
 void zb_osif_disable_all_inter(void)
@@ -548,9 +549,9 @@ void zigbee_event_notify(zigbee_event_t event)
 	k_poll_signal_raise(&zigbee_sig, event);
 }
 
-uint32_t zigbee_event_poll(uint32_t timeout_ms)
+uint32_t zigbee_event_poll(uint32_t timeout_us)
 {
-	/* Configure event/signals to wait for in wait_for_event function */
+	/* Configure event/signals to wait for in zigbee_event_poll function. */
 	static struct k_poll_event wait_events[] = {
 		K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
 					 K_POLL_MODE_NOTIFY_ONLY,
@@ -559,9 +560,10 @@ uint32_t zigbee_event_poll(uint32_t timeout_ms)
 
 	unsigned int signaled;
 	int result;
-	int64_t time_stamp = k_uptime_get();
+	/* Store timestamp of event polling start. */
+	int64_t timestamp_poll_start = k_uptime_ticks();
 
-	k_poll(wait_events, 1, K_MSEC(timeout_ms));
+	k_poll(wait_events, 1, K_USEC(timeout_us));
 
 	k_poll_signal_check(&zigbee_sig, &signaled, &result);
 	if (signaled) {
@@ -570,7 +572,7 @@ uint32_t zigbee_event_poll(uint32_t timeout_ms)
 		LOG_DBG("Received new Zigbee event: 0x%02x", result);
 	}
 
-	return k_uptime_delta(&time_stamp);
+	return k_ticks_to_us_floor32(k_uptime_ticks() - timestamp_poll_start);
 }
 
 void zigbee_enable(void)

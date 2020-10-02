@@ -34,8 +34,8 @@ extern "C" {
 	X(SUCCESS)			\
 	X(TIMEOUT)			\
 	X(REJECT)			\
-	X(WRITE_ERROR)			\
-	X(DISCONNECTED_ERROR)
+	X(WRITE_FAIL)			\
+	X(DISCONNECTED)
 
 enum config_status {
 #define X(name) _CONCAT(CONFIG_STATUS_, name),
@@ -70,8 +70,11 @@ enum config_status {
 /* Character used to inform about end of module description. */
 #define MODULE_DESCR_END_CHAR '\n'
 
-/* Description of the option representing module type. */
-#define OPT_DESCR_MODULE_TYPE "module_type"
+/* Description of the option representing module variant. */
+#define OPT_DESCR_MODULE_VARIANT "module_variant"
+
+/* Configuration channel local recipient. */
+#define CFG_CHAN_RECIPIENT_LOCAL 0x00
 
 /** @brief Configuration channel event.
  * Used to forward configuration channel request/response.
@@ -84,14 +87,12 @@ struct config_event {
 
 	/* Data exchanged with host. */
 	uint8_t event_id;
-	uint16_t recipient;
+	uint8_t recipient;
 	uint8_t status;
 	struct event_dyndata dyndata;
 };
 
 EVENT_TYPE_DYNDATA_DECLARE(config_event);
-
-#define CFG_CHAN_RECIPIENT_LOCAL 0x00
 
 extern const uint8_t __start_config_channel_modules[];
 

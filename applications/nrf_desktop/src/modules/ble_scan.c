@@ -328,6 +328,10 @@ static void scan_start(void)
 	size_t bond_count = count_bond();
 	int err;
 
+	if (scanning) {
+		scan_stop();
+	}
+
 	if (IS_ENABLED(CONFIG_DESKTOP_BLE_NEW_PEER_SCAN_REQUEST) &&
 	    (conn_count == bond_count) && peers_only) {
 		LOG_INF("All known peers connected - scanning disabled");
@@ -342,10 +346,11 @@ static void scan_start(void)
 
 	if (IS_ENABLED(CONFIG_DESKTOP_BLE_USE_LLPM) &&
 	    (CONFIG_BT_MAX_CONN == 2)) {
-		if (scanning) {
-			scan_stop();
-		}
-
+		/* If the central supports the LLPM and more than two
+		 * simultaneous Bluetooth connections, the BLE peers use the
+		 * connection interval of 10 ms instead of 7.5 ms and there is
+		 * no need to update the initial connection parameters.
+		 */
 		update_init_conn_params(is_llpm_peer_connected());
 	}
 
@@ -356,9 +361,7 @@ static void scan_start(void)
 	}
 
 	err = bt_scan_start(BT_SCAN_TYPE_SCAN_ACTIVE);
-	if (err == -EALREADY) {
-		LOG_WRN("Scanning already enabled");
-	} else if (err) {
+	if (err) {
 		LOG_ERR("Cannot start scanning (err %d)", err);
 		goto error;
 	} else {
@@ -408,7 +411,7 @@ static void scan_filter_match(struct bt_scan_device_info *device_info,
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
-	bt_addr_le_to_str(device_info->addr, addr, sizeof(addr));
+	bt_addr_le_to_str(device_info->recv_info->addr, addr, sizeof(addr));
 
 	LOG_INF("Filters matched. %s %sconnectable",
 		log_strdup(addr), connectable ? "" : "non");
@@ -465,8 +468,8 @@ static void scan_init(void)
 	reset_subscribers();
 
 	static const struct bt_le_scan_param sp = {
-		.type = BT_HCI_LE_SCAN_ACTIVE,
-		.filter_dup = BT_HCI_LE_SCAN_FILTER_DUP_ENABLE,
+		.type = BT_LE_SCAN_TYPE_ACTIVE,
+		.options = BT_LE_SCAN_OPT_FILTER_DUPLICATE,
 		.interval = BT_GAP_SCAN_FAST_INTERVAL,
 		.window = BT_GAP_SCAN_FAST_WINDOW,
 	};
@@ -526,11 +529,6 @@ static bool event_handler(const struct event_header *eh)
 
 			module_set_state(MODULE_STATE_READY);
 		} else if (check_state(event, MODULE_ID(ble_bond), MODULE_STATE_READY)) {
-			static bool started;
-
-			__ASSERT_NO_MSG(!started);
-			started = true;
-
 			/* Settings need to be loaded before scan start */
 			scan_start();
 		}
@@ -554,7 +552,6 @@ static bool event_handler(const struct event_header *eh)
 				bt_conn_unref(discovering_peer_conn);
 				discovering_peer_conn = NULL;
 			}
-			scan_stop();
 			/* ble_state keeps reference to connection object.
 			 * Cannot create new connection now.
 			 */
@@ -584,7 +581,6 @@ static bool event_handler(const struct event_header *eh)
 
 		case PEER_OPERATION_SCAN_REQUEST:
 			peers_only = false;
-			scan_stop();
 			scan_start();
 			break;
 

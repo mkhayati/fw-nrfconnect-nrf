@@ -7,6 +7,8 @@
 .. _`official Zephyr repository`: https://github.com/zephyrproject-rtos/zephyr
 .. _`Zephyr repository`: https://github.com/zephyrproject-rtos/zephyr
 
+.. _`Zephyr Network APIs`: https://docs.zephyrproject.org/latest/reference/networking/apis.html
+
 .. ### Links to MCUboot
 
 .. _`MCUboot`: https://mcuboot.com
@@ -48,12 +50,13 @@
 
 .. _`nRF Connect SDK latest documentation`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/index.html
 
+.. _`Nordic Semiconductor Infocenter`: https://infocenter.nordicsemi.com/
 
 .. _`LTE Link Monitor`: https://infocenter.nordicsemi.com/topic/ug_link_monitor/UG/link_monitor/lm_intro.html
 
 .. _`nRF Connect Programmer`: https://infocenter.nordicsemi.com/topic/ug_nc_programmer/UG/nrf_connect_programmer/ncp_introduction.html
 
-.. _`Updating the nRF9160 DK cellular modem`: https://infocenter.nordicsemi.com/topic/ug_nc_programmer/UG/nrf_connect_programmer/ncp_updating_modem_nrf9160dk.html
+.. _`Updating the nRF9160 DK cellular modem`: https://infocenter.nordicsemi.com/topic/ug_nrf91_dk_gsg/UG/nrf91_DK_gsg/updating_modem_firmware.html
 
 .. _`nRF9160 DK board control section in the nRF9160 DK User Guide`: https://infocenter.nordicsemi.com/topic/ug_nrf91_dk/UG/nrf91_DK/board_controller.html
 
@@ -79,10 +82,6 @@
 
 .. _`nRF52 Series`: https://infocenter.nordicsemi.com/topic/struct_nrf52/struct/nrf52.html
 
-.. _`Wi-Fi coexistence documentation`: https://infocenter.nordicsemi.com/topic/15.4_radio_driver_v2.0.0-1.prealpha/rd_coex.html
-.. _`PA/LNA module documentation`: https://infocenter.nordicsemi.com/topic/15.4_radio_driver_v2.0.0-1.prealpha/rd_fem.html
-.. _`antenna diversity documentation`: https://infocenter.nordicsemi.com/topic/15.4_radio_driver_v2.0.0-1.prealpha/ant_diversity.html
-
 .. _`anomaly 19`: https://infocenter.nordicsemi.com/topic/errata_nRF5340_EngA/ERR/nRF5340/EngineeringA/latest/anomaly_340_19.html
 
 .. _`nRF9160 compatibility matrix`: https://infocenter.nordicsemi.com/topic/comp_matrix_nrf9160/COMP/nrf9160/nrf9160_operator_certifications.html
@@ -105,7 +104,7 @@
 
 .. _`DevZone`: https://devzone.nordicsemi.com/
 
-.. _`Enabling and testing TLS in mqtt_simple`: https://devzone.nordicsemi.com/nordic/nordic-blog/b/blog/posts/enabling-and-testing-tls-in-mqtt_5f00_simple
+.. _`Enabling and testing TLS in mqtt_simple`: https://devzone.nordicsemi.com/nordic/cellular-iot-guides/b/software-and-protocols/posts/enabling-and-testing-tls-in-mqtt_5f00_simple
 
 .. _`nRF9160 DK product page`: https://www.nordicsemi.com/Software-and-Tools/Development-Kits/nRF9160-DK/Download#infotabs
 
@@ -125,7 +124,7 @@
 
 .. _`Energy efficiency` : https://www.nordicsemi.com/Products/Low-power-cellular-IoT#Cellular-performance-for-the-IoT
 
-.. _`nRF Connect for Cloud Certificate Update`: https://devzone.nordicsemi.com/nordic/cellular-iot-guides/b/getting-started-cellular/posts/nrf-cloud-certificate-update
+.. _`Updating the nRF Connect for Cloud certificate`: https://infocenter.nordicsemi.com/topic/ug_nrf91_dk_gsg/UG/nrf91_DK_gsg/updating_certificates.html
 
 .. _`nRF21540 DK product page`: https://www.nordicsemi.com/Products/Low-power-short-range-wireless/nRF21540
 
@@ -239,6 +238,23 @@
 
 .. _`mscgen`: http://www.mcternan.me.uk/mscgen/
 
+.. _`Azure Firmware Over The Air (FOTA)`: https://docs.microsoft.com/en-us/azure/iot-hub/tutorial-firmware-update
+.. _`Azure IoT Hub`: https://docs.microsoft.com/en-us/azure/iot-hub/about-iot-hub
+.. _`Creating an Azure IoT Hub instance using the Azure portal`: https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal
+.. _`Azure IoT Hub Device Provisioning Service (DPS)`: https://docs.microsoft.com/en-us/azure/iot-dps/
+.. _`Set up an Azure IoT Hub Device Provisioning Service (DPS) instance`: https://docs.microsoft.com/en-us/azure/iot-dps/quick-setup-auto-provision
+.. _`Azure Portal`: https://portal.azure.com/
+.. _`Creating Azure IoT Hub certificates`: https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-security-x509-get-started
+.. _`Azure IoT Hub direct method`: https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-direct-methods
+.. _`Baltimore CyberTrust Root certificate`: https://www.digicert.com/CACerts/BaltimoreCyberTrustRoot.crt.pem
+.. _`Azure IoT Hub MQTT protocol support`: https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-mqtt-support
+.. _`Azure IoT Explorer`: https://docs.microsoft.com/en-us/azure/iot-pnp/howto-use-iot-explorer
+.. _`Azure Blob Storage`: https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction
+.. _`Azure IoT Hub device twin messages`: https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-device-twins
+.. _`Device enrollments with Azure Portal`: https://docs.microsoft.com/en-us/azure/iot-dps/how-to-manage-enrollments
+.. _`Add certificates to the DPS instance`: https://docs.microsoft.com/en-us/azure/iot-dps/how-to-verify-certificates
+.. _`Registering the device with Azure IoT Hub`: https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal#register-a-new-device-in-the-iot-hub
+
 .. ### Links to Bluetooth specs
 
 .. _`Bluetooth Core Specification`: https://www.bluetooth.com/specifications/bluetooth-core-specification
@@ -253,8 +269,7 @@
 
 .. ### Links to Bluetooth Mesh
 
-.. _`Mesh Model Specification`: https://www.bluetooth.com/specifications/mesh-specifications/
-
+.. _`Mesh Model Specification`:
 .. _`Bluetooth Mesh Profile Specification`: https://www.bluetooth.com/specifications/mesh-specifications/
 
 .. _`Mesh Model Overview`: https://www.bluetooth.com/bluetooth-resources/bluetooth-mesh-models/
@@ -264,6 +279,7 @@
 .. _`Bluetooth Mesh FAQ`: https://www.bluetooth.com/learn-about-bluetooth/bluetooth-technology/topology-options/le-mesh/mesh-faq/
 
 .. _`Bluetooth Mesh Study Guide`: https://www.bluetooth.com/bluetooth-resources/bluetooth-mesh-developer-study-guide/
+
 
 .. ### Links to NFC specs
 
@@ -277,34 +293,32 @@
 
 .. ### Links to Thread and OpenThread
 
-.. _`OpenThread CoAP API`: https://openthread.io/reference/group/api-coap
-
-.. _`OpenThread CLI Reference`: https://github.com/openthread/openthread/blob/master/src/cli/README.md
-
-.. _`OpenThread.io`: https://openthread.io
-
-.. _`Thread Group`: https://www.threadgroup.org
-
-.. _`Thread protocol specification`: https://www.threadgroup.org/ThreadSpec
-
 .. _`Creative Commons 3.0 Attribution License`: https://creativecommons.org/licenses/by/3.0/
-
 .. _`shared by Google`: https://developers.google.com/readme/policies/
 
+.. _`OpenThread CoAP API`: https://openthread.io/reference/group/api-coap
+.. _`OpenThread CLI Reference`: https://github.com/openthread/openthread/blob/master/src/cli/README.md
+.. _`OpenThread.io`: https://openthread.io
 .. _`Device Types on OpenThread portal`: https://openthread.io/guides/thread-primer/node-roles-and-types#device_types
-
 .. _`Thread Commissioning on OpenThread portal`: https://openthread.io/guides/build/commissioning
 
-.. _`Thread Group's Commissioning White Paper`: https://www.threadgroup.org/Portals/0/documents/support/CommissioningWhitePaper_658_2.pdf
+.. _`OpenThread logging`: https://openthread.io/guides/build/logs
 
 .. _`Commissioner CLI commands`: https://github.com/openthread/openthread/blob/master/src/cli/README_COMMISSIONER.md
-
 .. _`Joiner CLI commands`: https://github.com/openthread/openthread/blob/master/src/cli/README_JOINER.md
+
+.. _`Thread Group`: https://www.threadgroup.org
+.. _`Thread protocol specification`: https://www.threadgroup.org/ThreadSpec
+.. _`Thread Group's Commissioning White Paper`: https://www.threadgroup.org/Portals/0/documents/support/CommissioningWhitePaper_658_2.pdf
+.. _`Thread Specification v1.2 Commercial White Paper`: https://www.threadgroup.org/Portals/0/documents/support/ThreadInCommercialWhitePaper_2542_1.pdf
+.. _`Thread Specification v1.2 Base Features`: https://www.threadgroup.org/Portals/0/documents/support/Thread%201.2%20Base%20Features.pdf
 
 .. _`wpantund`: https://github.com/openthread/wpantund/blob/master/README.md
 .. _`wpantund Installation Guide`: https://github.com/openthread/wpantund/blob/master/INSTALL.md
+.. _`wpantund Usage Overview`: https://github.com/openthread/wpantund#usage-overview
 
 .. _`PySpinel`: https://github.com/openthread/pyspinel/blob/master/README.md
+.. _`PySpinel arguments`: https://github.com/openthread/pyspinel/blob/master/README.md#description
 
 .. _`Thread Group's certification information`: https://www.threadgroup.org/What-is-Thread/Certification
 
@@ -315,12 +329,13 @@
 .. _`OpenThread THCI`: https://github.com/openthread/openthread/tree/master/tools/harness-thci
 
 .. _`Openthread acting as a new reference platform`: https://openthread.io/certification/automation-setup#acting_as_a_new_reference_platform
+.. _`OpenThread Border Router`: https://openthread.io/guides/border-router
 
 .. ### Links to Zigbee
 
 .. _`Zigbee Alliance`: https://www.zigbeealliance.org
 
-.. _`Zigbee Specification`: https://zigbeealliance.org/developer_resources/zigbee-specification
+.. _`Zigbee Specification`: https://zigbeealliance.org/developer_resources/
 
 .. _`Stack commissioning start sequence`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/zboss_api_doc/using_zigbee__z_c_l.html#stack_start_initiation
 
@@ -422,11 +437,16 @@
 
 .. _`RFC959 File Transfer Protocol (FTP)`: https://tools.ietf.org/html/rfc959
 
+.. _`RFC1055 Serial Line Internet Protocol (SLIP)`: https://tools.ietf.org/html/rfc1055
+
 .. _`Windows Python Path`: https://docs.python.org/3/using/windows.html#finding-the-python-executable
 
 .. _`Remote Procedure Calls (RPC)`: https://en.wikipedia.org/wiki/Remote_procedure_call
 
 .. _`Content-Range requests (IETF RFC 7233)`: https://tools.ietf.org/html/rfc7233
+
+.. _`Mosquitto`: https://mosquitto.org/
+
 
 .. ### Links to specific files on GitHub
 

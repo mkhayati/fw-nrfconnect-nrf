@@ -79,6 +79,33 @@ To do this, modify the setting of the following Kconfig option:
 
 For more configuration options, read the module documentation.
 
+.. _thread_ug_thread_1_2:
+
+Thread Specification v1.2 options
+=================================
+
+The OpenThread stack can be configured to operate in compliance with either Thread Specification v1.1 or :ref:`Thread Specification v1.2 <thread_ug_supported_features_v12>`.
+You can change the stack version by using the following Kconfig options:
+
+* :option:`CONFIG_OPENTHREAD_THREAD_VERSION_1_1` - Selects the Thread stack version that is compliant with Thread Specification v1.1.
+  This option is enabled by default if no other option is selected.
+* :option:`CONFIG_OPENTHREAD_THREAD_VERSION_1_2` - Selects the Thread stack version that is compliant with Thread Specification v1.2.
+
+By selecting support for the v1.2, you enable the following features in addition to the :ref:`v1.1 features <thread_ug_supported_features>`:
+
+* Enhanced Frame Pending
+* Enhanced Keep Alive
+* Thread Domain Name
+
+Moreover, the v1.2 also comes with the following features supported in experimental status:
+
+* :option:`CONFIG_OPENTHREAD_DUA` - Enable Domain Unicast Addresses.
+* :option:`CONFIG_OPENTHREAD_MLR` - Enable Multicast Listener Registration.
+* :option:`CONFIG_OPENTHREAD_BACKBONE_ROUTER` - Enable Backbone Router.
+
+.. note::
+    To test Thread Specification v1.2 options, you can use the :ref:`Thread CLI sample <ot_cli_sample>` with the :ref:`experimental v1.2 extension <ot_cli_sample_thread_v12>`.
+
 Thread commissioning
 ====================
 
@@ -100,11 +127,10 @@ You can also configure how the commissioning process is to be started:
 * Automatically after Joiner's power up with the :option:`CONFIG_OPENTHREAD_JOINER_AUTOSTART` option, configured for the Joiner device.
 * Started from the application.
 * Triggered by Command Line Interface commands.
-  In this case, the shell stack size must be increased to at least 3 KB by setting the following option:
-
-  * :option:`CONFIG_SHELL_STACK_SIZE` to ``3072``.
 
 For more details about the commissioning process, see `Thread Commissioning on OpenThread portal`_.
+
+.. _thread_ug_logging_options:
 
 OpenThread stack logging options
 ================================
@@ -283,6 +309,14 @@ The following table lists the supported features for each of these sets.
       - ✔
       - ✔
       -
+
+Replacing OpenThread Libraries
+******************************
+
+Each OpenThread example provides a possibility to replace libraries present in the nrfxlib when configured to build OpenThread stack from source with :option:`CONFIG_OPENTHREAD_SOURCES`.
+After the sample is build execute the following to overwrite the exising nrfxlib libraries with currently built ones::
+
+  west build -t install_openthread_libraries
 
 UART recommendations for NCP
 ****************************

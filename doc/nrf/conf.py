@@ -83,6 +83,8 @@ sys.path.append(os.path.join(NRF_BASE, 'scripts', 'sphinx_extensions'))
 extensions = ['sphinx.ext.intersphinx',
               'breathe',
               'interbreathe',
+              'table_from_rows',
+              'options_from_kconfig',
               'sphinx.ext.ifconfig',
               'sphinxcontrib.mscgen',
               'sphinx_tabs.tabs',
@@ -128,6 +130,11 @@ exclude_patterns = ['_build']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
+
+# Additional lexer for Pygments (syntax highlighting)
+from lexer.DtsLexer import DtsLexer
+from sphinx.highlighting import lexers
+lexers['DTS'] = DtsLexer()
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
@@ -218,6 +225,7 @@ html_redirect_pages = [
 rst_epilog = """
 .. include:: /links.txt
 .. include:: /shortcuts.txt
+.. include:: /versions.txt
 """
 
 def setup(app):

@@ -41,6 +41,7 @@ Kconfig*                                  @tejlmand
 /dts/                                     @anangl
 /ext/                                     @carlescufi
 /include/                                 @anangl @rlubos @pizi-nordic
+/include/net/azure_*                      @jtguggedal @simensrostad @coderbyheart
 /include/bluetooth/                       @joerchan
 /include/bluetooth/mesh/                  @trond-snekvik @joerchan
 /include/debug/ppi_trace.h                @nordic-krch @anangl
@@ -80,15 +81,18 @@ Kconfig*                                  @tejlmand
 /samples/nrf_rpc/                         @doki-nordic @KAGA164
 /samples/nrf5340/empty_app_core/          @doki-nordic
 /samples/nrf9160/                         @rlubos @lemrey
+/samples/nrf9160/azure_*                  @jtguggedal @simensrostad @coderbyheart
 /samples/spm/                             @lemrey @hakonfam @ioannisg
 /samples/openthread/                      @MarekPorwisz @lmaciejonczyk
 /samples/profiler/                        @pdunaj @pizi-nordic
 /samples/peripheral/radio_test/           @kapi-no
+/samples/peripheral/lpuart/               @nordic-krch
 /samples/usb/usb_uart_bridge/             @jhn-nordic @jtguggedal
 /samples/zigbee/                          @maciekfabia @mariuszpos
 /samples/CMakeLists.txt                   @tejlmand
 /scripts/                                 @mbolivar @tejlmand
 /scripts/hid_configurator/                @pdunaj
+/scripts/tools-versions-*.txt             @tejlmand @asle-nordic @groh @shanta-14
 /share/zephyrbuild-package/               @tejlmand
 /share/ncs-package/                       @tejlmand
 /subsys/bluetooth/                        @joerchan @carlescufi
@@ -102,6 +106,7 @@ Kconfig*                                  @tejlmand
 /subsys/fw_info/                          @hakonfam
 /subsys/mpsl/                             @joerchan @rugeGerritsen
 /subsys/net/                              @rlubos
+/subsys/net/lib/azure_*                   @jtguggedal @simensrostad @coderbyheart
 /subsys/nfc/                              @grochu @anangl
 /subsys/nrf_rpc/                          @doki-nordic @KAGA164
 /subsys/partition_manager/                @hakonfam

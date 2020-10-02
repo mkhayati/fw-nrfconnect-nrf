@@ -12,15 +12,16 @@ import codecs
 
 REPORT_ID = 6
 REPORT_SIZE = 30
-EVENT_DATA_LEN_MAX = REPORT_SIZE - 6
+EVENT_DATA_LEN_MAX = REPORT_SIZE - 5
 
-DEFAULT_RECIPIENT = 0x00
+LOCAL_RECIPIENT = 0x00
 
 MOD_FIELD_POS = 4
 OPT_FIELD_POS = 0
 OPT_FIELD_MAX_OPT_CNT = 0xf
 
 OPT_MODULE_DESCR = 0x0
+OPT_DESCR_MODULE_VARIANT = 'module_variant'
 
 POLL_INTERVAL_DEFAULT = 0.02
 POLL_RETRY_COUNT = 200
@@ -40,11 +41,12 @@ class ConfigStatus(IntEnum):
     SUCCESS            = 8
     TIMEOUT            = 9
     REJECT             = 10
-    WRITE_ERROR        = 11
-    DISCONNECTED_ERROR = 12
+    WRITE_FAIL         = 11
+    DISCONNECTED       = 12
     FAULT              = 99
 
 class NrfHidTransport():
+    HEADER_FORMAT = '<BBBBB'
     @staticmethod
     def _create_feature_report(recipient, event_id, status, event_data):
         assert isinstance(recipient, int)
@@ -73,8 +75,8 @@ class NrfHidTransport():
             # Unsupported operation
             assert False
 
-        report = struct.pack('<BHBBB', REPORT_ID, recipient, event_id, status,
-                             event_data_len)
+        report = struct.pack(NrfHidTransport.HEADER_FORMAT, REPORT_ID,
+                             recipient, event_id, status, event_data_len)
 
         if event_data:
             report += event_data
@@ -86,14 +88,15 @@ class NrfHidTransport():
 
     @staticmethod
     def _parse_response(response_raw):
-        data_field_len = len(response_raw) - struct.calcsize('<BHBBB')
+        data_field_len = len(response_raw) - \
+                         struct.calcsize(NrfHidTransport.HEADER_FORMAT)
 
         if data_field_len < 0:
             logging.error('Response too short')
             return None
 
         # Report ID is not included in the feature report from device
-        fmt = '<BHBBB{}s'.format(data_field_len)
+        fmt = '{}{}s'.format(NrfHidTransport.HEADER_FORMAT, data_field_len)
 
         (report_id, rcpt, event_id, status, data_len, data) = struct.unpack(fmt, response_raw)
 
@@ -146,7 +149,8 @@ class NrfHidTransport():
                 # Response was not ready
                 continue
 
-            if (rsp_recipient != recipient) or (rsp_event_id != event_id):
+            if (rsp_status != ConfigStatus.TIMEOUT) and \
+               ((rsp_recipient != recipient) or (rsp_event_id != event_id)):
                 logging.error('Response does not match the request:\n'
                               '\trequest: recipient {} event_id {}\n'
                               '\tresponse: recipient {}, event_id {}'.format(recipient,
@@ -207,14 +211,14 @@ class NrfHidDevice():
                 dev = hid.Device(path=d['path'])
                 dev_active = False
 
-                discovered_dev = NrfHidDevice(dev, DEFAULT_RECIPIENT)
+                discovered_dev = NrfHidDevice(dev, LOCAL_RECIPIENT)
                 if discovered_dev.initialized():
                     hwid = discovered_dev.get_hwid()
                     if hwid not in dir_devs:
                         dir_devs[hwid] = discovered_dev
                         dev_active = True
 
-                peers = NrfHidDevice._get_connected_peers(dev, DEFAULT_RECIPIENT)
+                peers = NrfHidDevice._get_connected_peers(dev, LOCAL_RECIPIENT)
                 for p in peers:
                     discovered_dev = NrfHidDevice(dev, peers[p])
                     if discovered_dev.initialized():
@@ -319,6 +323,22 @@ class NrfHidDevice():
                 'id' : opt_idx,
             }
             opt_idx += 1
+
+        # Fetch module's variant (if specified).
+        # The module variant is e.g. motion sensor model (PMW3360, PAW3212, ...).
+        # Script uses module variant to identify descriptions of config options.
+        if OPT_DESCR_MODULE_VARIANT in module_config['options']:
+            event_id = (module_id << MOD_FIELD_POS) | \
+                       (module_config['options'][OPT_DESCR_MODULE_VARIANT]['id'] << OPT_FIELD_POS)
+
+            success, fetched_data = NrfHidTransport.exchange_feature_report(dev, recipient,
+                                                                            event_id, ConfigStatus.FETCH,
+                                                                            None)
+            if not success or not fetched_data:
+                return None, None
+
+            module_variant = fetched_data.decode('utf-8').replace(chr(0x00), '')
+            module_name = '{}/{}'.format(module_name, module_variant)
 
         return module_name, module_config
 

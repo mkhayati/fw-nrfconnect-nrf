@@ -27,9 +27,9 @@ Requirements
 
 The sample supports the following development kits:
 
-.. include:: /includes/boardname_tables/sample_boardnames.txt
-   :start-after: set8_start
-   :end-before: set8_end
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833
 
 You can use one or more of the development kits listed above as the Thread CoAP Server.
 You also need one or more compatible development kits programmed with the :ref:`coap_client_sample` sample.
@@ -82,14 +82,18 @@ After building the sample and programming it to your development kit, test it by
 Running OpenThread CLI commands
 -------------------------------
 
-You can connect to any of the Simple CoAP Server or Simple CoAP Client nodes through a serial port and run OpenThread CLI commands.
+You can connect to any of the Simple CoAP Server or Simple CoAP Client nodes through a serial port.
 For more details, see :ref:`putty`.
+
+.. note::
+     |thread_hwfc_enabled|
+
+Once the serial connection is ready, you can run OpenThread CLI commands.
+For complete CLI documentation, refer to `OpenThread CLI Reference`_.
 
 .. note::
     In Zephyr shell, every OpenThread command needs to be prepended with the `ot` keyword.
     For example, ``ot channel 20``.
-
-For complete CLI documentation, refer to `OpenThread CLI Reference`_.
 
 Dependencies
 ************
