@@ -33,6 +33,17 @@ config MQTT_CLOUD_PORT
 	int "MQTT server port"
 	default 8883
 
+config MQTT_CLOUD_AUTH
+	bool "Enable MQTT Cloud authentication"
+
+config MQTT_CLOUD_USERNAME
+	string "Username"
+	depends on MQTT_CLOUD_AUTH
+
+config MQTT_CLOUD_PASSWORD
+	string "Password"
+	depends on MQTT_CLOUD_AUTH
+
 config MQTT_CLOUD_MQTT_RX_TX_BUFFER_LEN
 	int "Buffer sizes for the MQTT library."
 	default 1000
