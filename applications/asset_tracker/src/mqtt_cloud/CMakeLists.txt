@@ -3,7 +3,5 @@
 #
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
-zephyr_library()
-zephyr_library_sources(
-	src/mqtt_cloud.c
-)
+zephyr_include_directories(.)
+target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/mqtt_cloud.c)
