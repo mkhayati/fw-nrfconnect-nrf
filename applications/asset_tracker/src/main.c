@@ -21,7 +21,7 @@
 #endif /* CONFIG_BSD_LIBRARY */
 #include <net/cloud.h>
 #include <net/socket.h>
-#include <net/nrf_cloud.h>
+#include "mqtt_cloud.h"
 #if defined(CONFIG_NRF_CLOUD_AGPS)
 #include <net/nrf_cloud_agps.h>
 #endif
@@ -1595,7 +1595,7 @@ static void cloud_api_init(void)
 {
 	int ret;
 
-	cloud_backend = cloud_get_binding("NRF_CLOUD");
+	cloud_backend = cloud_get_binding("MQTT_CLOUD");
 	__ASSERT(cloud_backend != NULL, "nRF Cloud backend not found");
 
 	ret = cloud_init(cloud_backend, cloud_event_handler);
