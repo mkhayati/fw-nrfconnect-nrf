@@ -48,6 +48,7 @@ enum cloud_channel {
 	CLOUD_CHANNEL_AIR_PRESS,
 	/** The Air Quality sensor on the device. */
 	CLOUD_CHANNEL_AIR_QUAL,
+	CLOUD_CHANNEL_CO2_EQUIV,
 	/** The RSPR data obtained from the modem. */
 	CLOUD_CHANNEL_LTE_LINK_RSRP,
 	/** The descriptive DEVICE data indicating its status. */
@@ -78,6 +79,7 @@ enum cloud_channel {
 #define CLOUD_CHANNEL_STR_HUMID "HUMID"
 #define CLOUD_CHANNEL_STR_AIR_PRESS "AIR_PRESS"
 #define CLOUD_CHANNEL_STR_AIR_QUAL "AIR_QUAL"
+#define CLOUD_CHANNEL_STR_CO2_EQUIV "CO2_EQUIV"
 #define CLOUD_CHANNEL_STR_LTE_LINK_RSRP "RSRP"
 #define CLOUD_CHANNEL_STR_DEVICE_INFO "DEVICE"
 #define CLOUD_CHANNEL_STR_LIGHT_SENSOR "LIGHT"

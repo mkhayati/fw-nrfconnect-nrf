@@ -199,6 +199,11 @@ int env_sensors_get_air_quality(env_sensor_data_t *sensor_data)
 	return -1;
 }
 
+int env_sensors_get_co2_equivalent(env_sensor_data_t *sensor_data)
+{
+	return -1;
+}
+
 void env_sensors_set_send_interval(const uint32_t interval_s)
 {
 	if (interval_s == data_send_interval_s) {
