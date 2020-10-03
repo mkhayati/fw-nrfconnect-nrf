@@ -5,5 +5,5 @@
 #
 zephyr_library()
 zephyr_library_sources(
-	src/aws_iot.c
+	src/mqtt_cloud.c
 )
