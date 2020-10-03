@@ -1,0 +1,110 @@
+#
+# Copyright (c) 2019 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+menuconfig MQTT_CLOUD
+	bool "MQTT Cloud library"
+	select MQTT_LIB
+	select MQTT_LIB_TLS
+
+if MQTT_CLOUD
+
+config MQTT_CLOUD_STATIC_IPV4
+	bool "Enable use of static IPv4"
+
+config MQTT_CLOUD_STATIC_IPV4_ADDR
+	string "Static IPv4 address"
+	depends on MQTT_CLOUD_STATIC_IPV4
+
+config MQTT_CLOUD_TLS
+	bool "Enable TLS"
+	default y
+
+config MQTT_CLOUD_SEC_TAG
+	int "Security tag to use for MQTT Cloud connection"
+	depends on MQTT_CLOUD_TLS
+
+config MQTT_CLOUD_BROKER_HOST_NAME
+	string "MQTT Cloud server hostname"
+
+config MQTT_CLOUD_PORT
+	int "MQTT server port"
+	default 8883
+
+config MQTT_CLOUD_AUTH
+	bool "Enable MQTT Cloud authentication"
+
+config MQTT_CLOUD_USERNAME
+	string "Username"
+	depends on MQTT_CLOUD_AUTH
+
+config MQTT_CLOUD_PASSWORD
+	string "Password"
+	depends on MQTT_CLOUD_AUTH
+
+config MQTT_CLOUD_MQTT_RX_TX_BUFFER_LEN
+	int "Buffer sizes for the MQTT library."
+	default 1000
+	help
+	  Specifies maximum message size can be transmitted/received through
+	  MQTT (exluding MQTT PUBLISH payload).
+
+config MQTT_CLOUD_MQTT_PAYLOAD_BUFFER_LEN
+	int "Size of the MQTT PUBLISH payload buffer (receiving MQTT messages)."
+	default 1000
+
+config MQTT_CLOUD_IPV6
+	bool "Configure MQTT Cloud library to use IPv6 addressing. Otherwise IPv4 is used."
+
+config MQTT_CLOUD_APP_SUBSCRIPTION_LIST_COUNT
+	int "Amount of entries in the application subscription list"
+	default 0
+
+config MQTT_CLOUD_CLIENT_ID_MAX_LEN
+	int "Maximum length of cliend id"
+	default 20
+
+config MQTT_CLOUD_CLIENT_ID_STATIC
+	string "Static client id"
+	default "my-thing"
+
+config MQTT_CLOUD_CLIENT_ID_APP
+	bool "Client ID provided by application run-time"
+
+config MQTT_CLOUD_TOPIC_GET_ACCEPTED_SUBSCRIBE
+	bool "Subscribe to get accepted shadow topic, things/<thing-name>/shadow/get/accepted"
+
+config MQTT_CLOUD_TOPIC_GET_REJECTED_SUBSCRIBE
+	bool "Subscribe to get rejected shadow topic, things/<thing-name>/shadow/get/rejected"
+
+config MQTT_CLOUD_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE
+	bool "Subscribe to update accepted shadow topic, things/<thing-name>/shadow/update/accepted"
+
+config MQTT_CLOUD_TOPIC_UPDATE_REJECTED_SUBSCRIBE
+	bool "Subscribe to update rejected shadow topic, things/<thing-name>/shadow/update/rejected"
+
+config MQTT_CLOUD_TOPIC_UPDATE_DELTA_SUBSCRIBE
+	bool "Subscribe to update delta shadow topic, things/<thing-name>/shadow/update/delta"
+
+config MQTT_CLOUD_TOPIC_DELETE_ACCEPTED_SUBSCRIBE
+	bool "Subscribe to delete accepted shadow topic, things/<thing-name>/shadow/delete/accepted"
+
+config MQTT_CLOUD_TOPIC_DELETE_REJECTED_SUBSCRIBE
+	bool "Subscribe to delete rejected shadow topic, things/<thing-name>/shadow/delete/rejected"
+
+config MQTT_CLOUD_CONNECTION_POLL_THREAD
+	bool "Enable polling on MQTT socket in MQTT Cloud backend"
+
+config MQTT_CLOUD_TLS_SESSION_CACHING
+	bool "Enable TLS session caching"
+	depends on MQTT_CLOUD_TLS
+	default y
+
+module=MQTT_CLOUD
+module-dep=LOG
+module-str=MQTT Cloud
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
+
+endif # MQTT_CLOUD

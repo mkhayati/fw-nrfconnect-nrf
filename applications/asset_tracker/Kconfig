@@ -284,6 +284,8 @@ config CLOUD_CONNECT_ERR_REBOOT_S
 	int "Seconds to wait before rebooting when a cloud connect error occurs"
 	default 300
 
+rsource "src/mqtt_cloud/Kconfig"
+
 endmenu # Cloud
 
 menu "Environment sensors"
