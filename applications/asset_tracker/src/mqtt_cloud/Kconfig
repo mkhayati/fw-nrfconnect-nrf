@@ -63,25 +63,25 @@ config MQTT_CLOUD_CLIENT_ID_APP
 	bool "Client ID provided by application run-time"
 
 config MQTT_CLOUD_TOPIC_GET_ACCEPTED_SUBSCRIBE
-	bool "Subscribe to get accepted shadow topic, $aws/things/<thing-name>/shadow/get/accepted"
+	bool "Subscribe to get accepted shadow topic, things/<thing-name>/shadow/get/accepted"
 
 config MQTT_CLOUD_TOPIC_GET_REJECTED_SUBSCRIBE
-	bool "Subscribe to get rejected shadow topic, $aws/things/<thing-name>/shadow/get/rejected"
+	bool "Subscribe to get rejected shadow topic, things/<thing-name>/shadow/get/rejected"
 
 config MQTT_CLOUD_TOPIC_UPDATE_ACCEPTED_SUBSCRIBE
-	bool "Subscribe to update accepted shadow topic, $aws/things/<thing-name>/shadow/update/accepted"
+	bool "Subscribe to update accepted shadow topic, things/<thing-name>/shadow/update/accepted"
 
 config MQTT_CLOUD_TOPIC_UPDATE_REJECTED_SUBSCRIBE
-	bool "Subscribe to update rejected shadow topic, $aws/things/<thing-name>/shadow/update/rejected"
+	bool "Subscribe to update rejected shadow topic, things/<thing-name>/shadow/update/rejected"
 
 config MQTT_CLOUD_TOPIC_UPDATE_DELTA_SUBSCRIBE
-	bool "Subscribe to update delta shadow topic, $aws/things/<thing-name>/shadow/update/delta"
+	bool "Subscribe to update delta shadow topic, things/<thing-name>/shadow/update/delta"
 
 config MQTT_CLOUD_TOPIC_DELETE_ACCEPTED_SUBSCRIBE
-	bool "Subscribe to delete accepted shadow topic, $aws/things/<thing-name>/shadow/delete/accepted"
+	bool "Subscribe to delete accepted shadow topic, things/<thing-name>/shadow/delete/accepted"
 
 config MQTT_CLOUD_TOPIC_DELETE_REJECTED_SUBSCRIBE
-	bool "Subscribe to delete rejected shadow topic, $aws/things/<thing-name>/shadow/delete/rejected"
+	bool "Subscribe to delete rejected shadow topic, things/<thing-name>/shadow/delete/rejected"
 
 config MQTT_CLOUD_CONNECTION_POLL_THREAD
 	bool "Enable polling on MQTT socket in MQTT Cloud backend"
