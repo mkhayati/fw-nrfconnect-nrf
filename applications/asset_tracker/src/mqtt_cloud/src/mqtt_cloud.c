@@ -804,6 +804,7 @@ static int client_broker_init(struct mqtt_client *const client)
 	client->rx_buf_size		= sizeof(rx_buffer);
 	client->tx_buf			= tx_buffer;
 	client->tx_buf_size		= sizeof(tx_buffer);
+#if defined(MQTT_CLOUD_TLS)
 	client->transport.type		= MQTT_TRANSPORT_SECURE;
 
 	static sec_tag_t sec_tag_list[] = { CONFIG_MQTT_CLOUD_SEC_TAG };
@@ -830,6 +831,7 @@ static int client_broker_init(struct mqtt_client *const client)
 		return err;
 	}
 #endif /* !defined(CONFIG_BSD_LIBRARY) */
+#endif /* defined(MQTT_CLOUD_TLS) */
 
 	return err;
 }
@@ -955,7 +957,11 @@ int mqtt_cloud_connect(struct mqtt_cloud_config *const config)
 
 		err = connect_error_translate(err);
 
+#if defined(MQTT_CLOUD_TLS)
 		config->socket = client.transport.tls.sock;
+#else
+		config->socket = client.transport.tcp.sock;
+#endif
 	}
 
 	return err;
