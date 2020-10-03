@@ -87,6 +87,7 @@ enum cloud_channel {
 #define CLOUD_CHANNEL_STR_LIGHT_IR "LIGHT_IR"
 #define CLOUD_CHANNEL_STR_ASSISTED_GPS "AGPS"
 #define CLOUD_CHANNEL_STR_RGB_LED "LED"
+#define CLOUD_CHANNEL_STR_BUZZER "BUZZER"
 #define CLOUD_CHANNEL_STR_MODEM "MODEM"
 
 struct cloud_data {
@@ -143,6 +144,7 @@ enum cloud_cmd_type {
 	CLOUD_CMD_THRESHOLD_LOW,
 	CLOUD_CMD_INTERVAL,
 	CLOUD_CMD_COLOR,
+	CLOUD_CMD_FREQUENCY,
 	CLOUD_CMD_MODEM_PARAM,
 	CLOUD_CMD_DATA_STRING,
 
@@ -161,6 +163,7 @@ enum cloud_cmd_state {
 #define CLOUD_CMD_TYPE_STR_THRESH_HI "thresh_hi"
 #define CLOUD_CMD_TYPE_STR_INTERVAL "interval"
 #define CLOUD_CMD_TYPE_STR_COLOR "color"
+#define CLOUD_CMD_TYPE_STR_FREQUENCY "frequency"
 #define CLOUD_CMD_TYPE_STR_MODEM_PARAM "modemParams"
 #define CLOUD_CMD_TYPE_STR_DATA_STRING "data_string"
 
