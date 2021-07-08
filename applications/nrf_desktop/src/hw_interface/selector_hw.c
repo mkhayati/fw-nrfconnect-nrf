@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -13,10 +13,10 @@
 
 #include "event_manager.h"
 #include "selector_event.h"
-#include "power_event.h"
+#include <caf/events/power_event.h>
 
 #define MODULE selector
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_SELECTOR_HW_LOG_LEVEL);
@@ -34,11 +34,11 @@ enum state {
 struct selector {
 	const struct selector_config *config;
 	struct gpio_callback gpio_cb[ARRAY_SIZE(port_map)];
-	struct k_delayed_work work;
+	struct k_work_delayable work;
 	uint8_t position;
 };
 
-static struct device *gpio_dev[ARRAY_SIZE(port_map)];
+static const struct device *gpio_dev[ARRAY_SIZE(port_map)];
 static struct selector selectors[ARRAY_SIZE(selector_config)];
 static enum state state;
 
@@ -138,7 +138,7 @@ static int disable_interrupts_nolock(struct selector *selector)
 	return err;
 }
 
-static void selector_isr(struct device *dev, struct gpio_callback *cb,
+static void selector_isr(const struct device *dev, struct gpio_callback *cb,
 			 uint32_t pins_mask)
 {
 	uint8_t port = dev - gpio_dev[0];
@@ -149,7 +149,7 @@ static void selector_isr(struct device *dev, struct gpio_callback *cb,
 			   gpio_cb);
 	disable_interrupts_nolock(sel);
 
-	k_delayed_work_submit(&sel->work, DEBOUNCE_DELAY);
+	k_work_reschedule(&sel->work, DEBOUNCE_DELAY);
 }
 
 static int read_state_and_enable_interrupts(struct selector *selector)
@@ -236,7 +236,8 @@ static int sleep(void)
 		err = disable_interrupts_nolock(&selectors[i]);
 
 		if (!err) {
-			k_delayed_work_cancel(&selectors[i].work);
+			/* Cancel cannot fail if executed from another work's context. */
+			(void)k_work_cancel_delayable(&selectors[i].work);
 			err = configure_pins(&selectors[i], false);
 		}
 	}
@@ -284,7 +285,7 @@ static int init(void)
 	for (size_t i = 0; (i < ARRAY_SIZE(selectors)) && !err; i++) {
 		selectors[i].config = selector_config[i];
 
-		k_delayed_work_init(&selectors[i].work, selector_work_fn);
+		k_work_init_delayable(&selectors[i].work, selector_work_fn);
 
 		err = configure_callbacks(&selectors[i]);
 	}

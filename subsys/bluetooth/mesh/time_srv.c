@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <bluetooth/mesh/time_srv.h>
@@ -10,7 +10,6 @@
 #include "model_utils.h"
 #include "time_util.h"
 
-#define SEC_PER_MIN 60U
 #define SUBSEC_STEPS 256U
 
 struct bt_mesh_time_srv_settings_data {
@@ -202,6 +201,13 @@ static void handle_time_status(struct bt_mesh_model *model,
 	struct bt_mesh_time_status status;
 
 	bt_mesh_time_decode_time_params(buf, &status);
+
+	if (status.is_authority <= srv->data.sync.status.is_authority &&
+	    srv->data.sync.status.uncertainty < status.uncertainty) {
+		/* The new time status is not an improvement, ignore. */
+		return;
+	}
+
 	srv->data.sync.uptime = k_uptime_get();
 	srv->data.sync.status.tai = status.tai;
 	srv->data.sync.status.uncertainty = status.uncertainty;
@@ -315,27 +321,55 @@ static void handle_role_set(struct bt_mesh_model *model,
 }
 
 const struct bt_mesh_model_op _bt_mesh_time_srv_op[] = {
-	{ BT_MESH_TIME_OP_TIME_GET, BT_MESH_TIME_MSG_LEN_GET, handle_time_get },
-	{ BT_MESH_TIME_OP_TIME_STATUS, BT_MESH_TIME_MSG_LEN_TIME_STATUS,
-	  handle_time_status },
-	{ BT_MESH_TIME_OP_TIME_ZONE_GET, BT_MESH_TIME_MSG_LEN_GET,
-	  handle_zone_get },
-	{ BT_MESH_TIME_OP_TAI_UTC_DELTA_GET, BT_MESH_TIME_MSG_LEN_GET,
-	  handle_tai_utc_delta_get },
+	{
+		BT_MESH_TIME_OP_TIME_GET,
+		BT_MESH_TIME_MSG_LEN_GET,
+		handle_time_get,
+	},
+	{
+		BT_MESH_TIME_OP_TIME_STATUS,
+		BT_MESH_TIME_MSG_LEN_TIME_STATUS,
+		handle_time_status,
+	},
+	{
+		BT_MESH_TIME_OP_TIME_ZONE_GET,
+		BT_MESH_TIME_MSG_LEN_GET,
+		handle_zone_get,
+	},
+	{
+		BT_MESH_TIME_OP_TAI_UTC_DELTA_GET,
+		BT_MESH_TIME_MSG_LEN_GET,
+		handle_tai_utc_delta_get,
+	},
 	BT_MESH_MODEL_OP_END,
 };
 
 const struct bt_mesh_model_op _bt_mesh_time_setup_srv_op[] = {
-	{ BT_MESH_TIME_OP_TIME_SET, BT_MESH_TIME_MSG_LEN_TIME_SET,
-	  handle_time_set },
-	{ BT_MESH_TIME_OP_TIME_ZONE_SET, BT_MESH_TIME_MSG_LEN_TIME_ZONE_SET,
-	  handle_zone_set },
-	{ BT_MESH_TIME_OP_TAI_UTC_DELTA_SET,
-	  BT_MESH_TIME_MSG_LEN_TAI_UTC_DELTA_SET, handle_tai_utc_delta_set },
-	{ BT_MESH_TIME_OP_TIME_ROLE_GET, BT_MESH_TIME_MSG_LEN_GET,
-	  handle_role_get },
-	{ BT_MESH_TIME_OP_TIME_ROLE_SET, BT_MESH_TIME_MSG_LEN_TIME_ROLE_SET,
-	  handle_role_set },
+	{
+		BT_MESH_TIME_OP_TIME_SET,
+		BT_MESH_TIME_MSG_LEN_TIME_SET,
+		handle_time_set,
+	},
+	{
+		BT_MESH_TIME_OP_TIME_ZONE_SET,
+		BT_MESH_TIME_MSG_LEN_TIME_ZONE_SET,
+		handle_zone_set,
+	},
+	{
+		BT_MESH_TIME_OP_TAI_UTC_DELTA_SET,
+		BT_MESH_TIME_MSG_LEN_TAI_UTC_DELTA_SET,
+		handle_tai_utc_delta_set,
+	},
+	{
+		BT_MESH_TIME_OP_TIME_ROLE_GET,
+		BT_MESH_TIME_MSG_LEN_GET,
+		handle_role_get,
+	},
+	{
+		BT_MESH_TIME_OP_TIME_ROLE_SET,
+		BT_MESH_TIME_MSG_LEN_TIME_ROLE_SET,
+		handle_role_set,
+	},
 	BT_MESH_MODEL_OP_END,
 };
 
@@ -345,23 +379,35 @@ static int bt_mesh_time_srv_init(struct bt_mesh_model *model)
 
 	srv->model = model;
 	net_buf_simple_init(srv->pub.msg, 0);
-	if (IS_ENABLED(CONFIG_BT_MESH_MODEL_EXTENSIONS)) {
-		/* Model extensions:
-		 * To simplify the model extension tree, we're flipping the
-		 * relationship between the time server and the time
-		 * setup server. In the specification, the time setup
-		 * server extends the time server, which is the opposite of
-		 * what we're doing here. This makes no difference for the mesh
-		 * stack, but it makes it a lot easier to extend this model, as
-		 * we won't have to support multiple extenders.
-		 */
-		bt_mesh_model_extend(
-			model,
-			bt_mesh_model_find(bt_mesh_model_elem(model),
-					   BT_MESH_MODEL_ID_TIME_SETUP_SRV));
-	}
+	/* Model extensions:
+	 * To simplify the model extension tree, we're flipping the
+	 * relationship between the time server and the time
+	 * setup server. In the specification, the time setup
+	 * server extends the time server, which is the opposite of
+	 * what we're doing here. This makes no difference for the mesh
+	 * stack, but it makes it a lot easier to extend this model, as
+	 * we won't have to support multiple extenders.
+	 */
+	bt_mesh_model_extend(
+		model,
+		bt_mesh_model_find(bt_mesh_model_elem(model),
+				   BT_MESH_MODEL_ID_TIME_SETUP_SRV));
 
 	return 0;
+}
+
+static void bt_mesh_time_srv_reset(struct bt_mesh_model *model)
+{
+	struct bt_mesh_time_srv *srv = model->user_data;
+	struct bt_mesh_time_srv_data data = { 0 };
+
+	srv->data = data;
+	net_buf_simple_reset(srv->pub.msg);
+
+	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
+		(void)bt_mesh_model_data_store(srv->model, false, NULL, NULL,
+					       0);
+	}
 }
 
 #ifdef CONFIG_BT_MESH_TIME_SRV_PERSISTENT
@@ -388,6 +434,7 @@ static int bt_mesh_time_srv_settings_set(struct bt_mesh_model *model,
 
 const struct bt_mesh_model_cb _bt_mesh_time_srv_cb = {
 	.init = bt_mesh_time_srv_init,
+	.reset = bt_mesh_time_srv_reset,
 #ifdef CONFIG_BT_MESH_TIME_SRV_PERSISTENT
 	.settings_set = bt_mesh_time_srv_settings_set,
 #endif
@@ -447,6 +494,7 @@ int64_t bt_mesh_time_srv_mktime(struct bt_mesh_time_srv *srv, struct tm *timeptr
 	int64_t curr_time_zone =
 		zone_offset_to_sec(srv->data.sync.status.time_zone_offset);
 	struct bt_mesh_time_tai tai;
+	int64_t sec;
 	int err;
 
 	err = ts_to_tai(&tai, timeptr);
@@ -454,31 +502,34 @@ int64_t bt_mesh_time_srv_mktime(struct bt_mesh_time_srv *srv, struct tm *timeptr
 		return err;
 	}
 
-	tai.sec -= curr_time_zone;
-	tai.sec += curr_utc_delta;
+	sec = tai.sec;
+	sec -= curr_time_zone;
+	sec += curr_utc_delta;
 
 	int64_t new_time_zone =
 		zone_offset_to_sec(srv->data.time_zone_change.new_offset);
 
 	if (srv->data.time_zone_change.timestamp &&
-	    tai.sec >= srv->data.time_zone_change.timestamp + new_time_zone) {
-		tai.sec -= new_time_zone;
+	    sec >= srv->data.time_zone_change.timestamp + new_time_zone) {
+		sec -= new_time_zone;
 	} else {
-		tai.sec -= curr_time_zone;
+		sec -= curr_time_zone;
 	}
 
 	int64_t new_utc_delta = srv->data.tai_utc_change.delta_new;
 
 	if (srv->data.tai_utc_change.timestamp &&
-	    tai.sec >= srv->data.tai_utc_change.timestamp - new_utc_delta) {
-		tai.sec += new_utc_delta;
+	    sec >= srv->data.tai_utc_change.timestamp - new_utc_delta) {
+		sec += new_utc_delta;
 	} else {
-		tai.sec += curr_utc_delta;
+		sec += curr_utc_delta;
 	}
 
-	if ((tai.sec < 0) || (tai.sec < srv->data.sync.status.tai.sec)) {
+	if ((sec < 0) || (sec < srv->data.sync.status.tai.sec)) {
 		return -EINVAL;
 	}
+
+	tai.sec = sec;
 
 	return tai_to_ms(&tai) - tai_to_ms(&srv->data.sync.status.tai) +
 	       srv->data.sync.uptime;

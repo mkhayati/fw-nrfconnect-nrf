@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <assert.h>
@@ -22,7 +22,7 @@
 #include "chmap_filter.h"
 
 #define MODULE ble_qos
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 #include "ble_event.h"
 #include "config_event.h"
 #include "hid_event.h"
@@ -106,7 +106,7 @@ BUILD_ASSERT(THREAD_PRIORITY >= CONFIG_BT_HCI_TX_PRIO);
 
 static void ble_qos_thread_fn(void);
 
-static struct device *cdc_dev;
+static const struct device *cdc_dev;
 static uint32_t cdc_dtr;
 
 enum ble_qos_opt {
@@ -249,7 +249,7 @@ static int settings_set(const char *key, size_t len_rd,
 SETTINGS_STATIC_HANDLER_DEFINE(ble_qos, MODULE_NAME, NULL, settings_set, NULL,
 			       NULL);
 
-static void send_uart_data(struct device *cdc_dev, const uint8_t *str, int str_len)
+static void send_uart_data(const struct device *cdc_dev, const uint8_t *str, int str_len)
 {
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	int sent = uart_fifo_fill(cdc_dev, str, str_len);

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 /**
  * @file
@@ -14,36 +14,39 @@
 #include <bluetooth/mesh/light_temp_srv.h>
 #include "model_utils.h"
 
-static inline uint16_t set_temp(struct bt_mesh_light_temp_srv *srv,
-				uint16_t temp_val)
-{
-	if (temp_val < srv->temp_range.min) {
-		return srv->temp_range.min;
-	} else if (temp_val > srv->temp_range.max) {
-		return srv->temp_range.max;
-	} else {
-		return temp_val;
-	}
-}
+#define LIGHT_TEMP_LVL_OFFSET (-INT16_MIN)
 
 static inline uint16_t lvl_to_temp(struct bt_mesh_light_temp_srv *srv,
 				   int16_t lvl)
 {
-	return srv->temp_range.min +
-	       (lvl + ((UINT16_MAX / 2) + 1)) *
-		       (srv->temp_range.max - srv->temp_range.min) / UINT16_MAX;
+	return srv->range.min +
+	       ROUNDED_DIV((int32_t)(lvl + LIGHT_TEMP_LVL_OFFSET) *
+				(srv->range.max - srv->range.min),
+				(int32_t)UINT16_MAX);
 }
 
 static inline int16_t temp_to_lvl(struct bt_mesh_light_temp_srv *srv,
 				  uint16_t raw_temp)
 {
-	uint16_t temp = MAX(raw_temp, srv->temp_range.min);
+	uint16_t temp = CLAMP(raw_temp, srv->range.min, srv->range.max);
 
-	temp = MIN(raw_temp, srv->temp_range.max);
-
-	return (temp - srv->temp_range.min) * UINT16_MAX /
-		       (srv->temp_range.max - srv->temp_range.min) -
-	       ((UINT16_MAX / 2) + 1);
+	return ROUNDED_DIV((temp - srv->range.min) * UINT16_MAX,
+				(srv->range.max - srv->range.min)) -
+				LIGHT_TEMP_LVL_OFFSET;
 }
+
+void bt_mesh_light_temp_srv_set(struct bt_mesh_light_temp_srv *srv,
+				struct bt_mesh_msg_ctx *ctx,
+				struct bt_mesh_light_temp_set *set,
+				struct bt_mesh_light_temp_status *rsp);
+
+enum bt_mesh_model_status
+bt_mesh_light_temp_srv_range_set(struct bt_mesh_light_temp_srv *srv,
+			 struct bt_mesh_msg_ctx *ctx,
+			 struct bt_mesh_light_temp_range *range);
+
+void bt_mesh_light_temp_srv_default_set(struct bt_mesh_light_temp_srv *srv,
+				struct bt_mesh_msg_ctx *ctx,
+				const struct bt_mesh_light_temp *dflt);
 
 #endif /* BT_MESH_INTERNAL_LIGHT_CTL_H__ */

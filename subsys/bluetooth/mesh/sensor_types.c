@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <string.h>
 #include <stdio.h>
@@ -63,6 +63,12 @@ UNIT(lux_hour) = { "Lux hours", "lxh" };
 UNIT(lumen) = { "Lumen", "lm" };
 UNIT(lumen_per_watt) = { "Lumen per Watt", "lm/W" };
 UNIT(lumen_hour) = { "Lumen hours", "lmh" };
+UNIT(degrees) = { "Degrees", "degrees" };
+UNIT(mps) = { "Metres per second", "m/s" };
+UNIT(microtesla) = { "Microtesla", "uT" };
+UNIT(concentration) = { "Concentration", "per m3" };
+UNIT(pascal) = { "Pascal", "Pa" };
+UNIT(metre) = { "Metre", "m" };
 UNIT(unitless) = { "Unitless" };
 /*******************************************************************************
  * Encoders and decoders
@@ -161,7 +167,7 @@ static int64_t div_scalar(int64_t val, const struct scalar_repr *repr)
 	       (val / repr->value);
 }
 
-static uint32_t scalar_max(const struct bt_mesh_sensor_format *format)
+static int64_t scalar_max(const struct bt_mesh_sensor_format *format)
 {
 	const struct scalar_repr *repr = format->user_data;
 
@@ -173,7 +179,7 @@ static uint32_t scalar_max(const struct bt_mesh_sensor_format *format)
 		return BIT64(8 * format->size - 1) - 1;
 	}
 
-	uint32_t max_value = BIT64(8 * format->size) - 1;
+	int64_t max_value = BIT64(8 * format->size) - 1;
 
 	if (repr->flags & (HAS_HIGHER_THAN | HAS_INVALID)) {
 		max_value -= 2;
@@ -208,7 +214,7 @@ static int scalar_encode(const struct bt_mesh_sensor_format *format,
 	int64_t raw = div_scalar(val->val1, repr) +
 		    div_scalar(val->val2, repr) / 1000000LL;
 
-	uint32_t max_value = scalar_max(format);
+	int64_t max_value = scalar_max(format);
 	int32_t min_value = scalar_min(format);
 
 	if (raw > max_value || raw < min_value) {
@@ -217,7 +223,7 @@ static int scalar_encode(const struct bt_mesh_sensor_format *format,
 		if (repr->flags & (HAS_HIGHER_THAN | HAS_INVALID)) {
 			raw = type_max - 2;
 		} else if (repr->flags & HAS_UNDEFINED) {
-			raw = type_max - 1;
+			raw = type_max;
 		} else {
 			return -ERANGE;
 		}
@@ -283,11 +289,17 @@ static int scalar_decode(const struct bt_mesh_sensor_format *format,
 		return -ERANGE;
 	}
 
-	uint32_t max_value = scalar_max(format);
+	int64_t max_value = scalar_max(format);
 	int32_t min_value = scalar_min(format);
 
 	if (raw < min_value || raw > max_value) {
-		return -ERANGE;
+		if (!(repr->flags & HAS_UNDEFINED)) {
+			return -ERANGE;
+		}
+
+		val->val1 = BIT64(8 * format->size) - 1;
+		val->val2 = 0;
+		return 0;
 	}
 
 	int64_t million = mul_scalar(raw * 1000000LL, repr);
@@ -336,8 +348,9 @@ static int exp_1_1_encode(const struct bt_mesh_sensor_format *format,
 		return -ENOMEM;
 	}
 
-	net_buf_simple_add_u8(buf, sensor_powtime_encode((val->val1 * 1000) +
-							 (val->val2 / 1000)));
+	net_buf_simple_add_u8(buf,
+			      sensor_powtime_encode((val->val1 * 1000ULL) +
+						    (val->val2 / 1000ULL)));
 	return 0;
 }
 
@@ -348,10 +361,11 @@ static int exp_1_1_decode(const struct bt_mesh_sensor_format *format,
 		return -ENOMEM;
 	}
 
-	uint64_t time_ns = sensor_powtime_decode_ns(net_buf_simple_pull_u8(buf));
+	uint64_t time_us =
+		sensor_powtime_decode_us(net_buf_simple_pull_u8(buf));
 
-	val->val1 = time_ns / 1000000L;
-	val->val2 = time_ns % 1000000L;
+	val->val1 = time_us / USEC_PER_SEC;
+	val->val2 = time_us % USEC_PER_SEC;
 	return 0;
 }
 
@@ -410,42 +424,72 @@ FORMAT(percentage_16) = SCALAR_FORMAT_MAX(2,
 					  (UNSIGNED | HAS_UNDEFINED),
 					  percent,
 					  SCALAR(1e-2, 0),
-					  200);
+					  10000);
+FORMAT(percentage_delta_trigger) = SCALAR_FORMAT(2,
+					  (UNSIGNED),
+					  percent,
+					  SCALAR(1e-2, 0));
 
 /*******************************************************************************
  * Environmental formats
  ******************************************************************************/
-FORMAT(temp_8)		  = SCALAR_FORMAT(1,
-					  SIGNED,
-					  celsius,
-					  SCALAR(1, -1));
-FORMAT(temp)		  = SCALAR_FORMAT(2,
-					  SIGNED,
-					  celsius,
-					  SCALAR(1e-2, 0));
-FORMAT(co2_concentration) = SCALAR_FORMAT(2,
-					  (HAS_HIGHER_THAN | HAS_UNDEFINED),
-					  ppm,
-					  SCALAR(1, 0));
-FORMAT(noise)		  = SCALAR_FORMAT(1,
-					  (UNSIGNED |
-					   HAS_HIGHER_THAN |
-					   HAS_UNDEFINED),
-					  db,
-					  SCALAR(1, 0));
-FORMAT(voc_concentration) = SCALAR_FORMAT_MAX(2,
+FORMAT(temp_8)		      = SCALAR_FORMAT(1,
+					      SIGNED,
+					      celsius,
+					      SCALAR(1, -1));
+FORMAT(temp)		      = SCALAR_FORMAT(2,
+					      SIGNED,
+					      celsius,
+					      SCALAR(1e-2, 0));
+FORMAT(co2_concentration)     = SCALAR_FORMAT(2,
+					      (HAS_HIGHER_THAN | HAS_UNDEFINED),
+					      ppm,
+					      SCALAR(1, 0));
+FORMAT(noise)		      = SCALAR_FORMAT(1,
 					      (UNSIGNED |
 					       HAS_HIGHER_THAN |
 					       HAS_UNDEFINED),
-					      ppb,
-					      SCALAR(1, 0),
-					      65533);
-FORMAT(humidity)          = SCALAR_FORMAT_MAX(2,
+					      db,
+					      SCALAR(1, 0));
+FORMAT(voc_concentration)     = SCALAR_FORMAT_MAX(2,
+						  (UNSIGNED |
+						   HAS_HIGHER_THAN |
+						   HAS_UNDEFINED),
+						  ppb,
+						  SCALAR(1, 0),
+						  65533);
+FORMAT(wind_speed)            = SCALAR_FORMAT(2,
 					      UNSIGNED,
-					      percent,
-					      SCALAR(1e-2, 0),
-					      10000);
-
+					      mps,
+					      SCALAR(1e-2, 0));
+FORMAT(temp_8_wide)           = SCALAR_FORMAT(1,
+					      SIGNED,
+					      celsius,
+					      SCALAR(1, 0));
+FORMAT(gust_factor)           = SCALAR_FORMAT(1,
+					      UNSIGNED,
+					      unitless,
+					      SCALAR(1e-1, 0));
+FORMAT(magnetic_flux_density) = SCALAR_FORMAT(2,
+					      SIGNED,
+					      microtesla,
+					      SCALAR(1e-1, 0));
+FORMAT(pollen_concentration)  = SCALAR_FORMAT(3,
+					      UNSIGNED,
+					      concentration,
+					      SCALAR(1, 0));
+FORMAT(pressure)              = SCALAR_FORMAT(4,
+					      UNSIGNED,
+					      pascal,
+					      SCALAR(1e-1, 0));
+FORMAT(rainfall)              = SCALAR_FORMAT(2,
+					      UNSIGNED,
+					      metre,
+					      SCALAR(1e-3, 0));
+FORMAT(uv_index)              = SCALAR_FORMAT(1,
+					      UNSIGNED,
+					      unitless,
+					      SCALAR(1, 0));
 /*******************************************************************************
  * Time formats
  ******************************************************************************/
@@ -544,6 +588,11 @@ FORMAT(perceived_lightness)	= SCALAR_FORMAT(2,
 /*******************************************************************************
  * Miscellaneous formats
  ******************************************************************************/
+FORMAT(direction_16)     = SCALAR_FORMAT_MAX(2,
+					     UNSIGNED,
+					     degrees,
+					     SCALAR(1e-2, 0),
+					     35999);
 FORMAT(count_16)	 = SCALAR_FORMAT(2,
 					 (UNSIGNED | HAS_UNDEFINED),
 					 unitless,
@@ -677,9 +726,29 @@ SENSOR_TYPE(precise_present_amb_temp) = {
 /*******************************************************************************
  * Environmental
  ******************************************************************************/
+SENSOR_TYPE(apparent_wind_direction) = {
+	.id = BT_MESH_PROP_ID_APPARENT_WIND_DIRECTION,
+	CHANNELS(CHANNEL("Apparent Wind Direction", direction_16)),
+};
+SENSOR_TYPE(apparent_wind_speed) = {
+	.id = BT_MESH_PROP_ID_APPARENT_WIND_SPEED,
+	CHANNELS(CHANNEL("Apparent Wind Speed", wind_speed)),
+};
+SENSOR_TYPE(dew_point) = {
+	.id = BT_MESH_PROP_ID_DEW_POINT,
+	CHANNELS(CHANNEL("Dew Point", temp_8_wide)),
+};
+SENSOR_TYPE(gust_factor) = {
+	.id = BT_MESH_PROP_ID_GUST_FACTOR,
+	CHANNELS(CHANNEL("Gust Factor", gust_factor)),
+};
+SENSOR_TYPE(heat_index) = {
+	.id = BT_MESH_PROP_ID_HEAT_INDEX,
+	CHANNELS(CHANNEL("Heat Index", temp_8_wide)),
+};
 SENSOR_TYPE(present_amb_rel_humidity) = {
 	.id = BT_MESH_PROP_ID_PRESENT_AMB_REL_HUMIDITY,
-	CHANNELS(CHANNEL("Present ambient relative humidity", humidity)),
+	CHANNELS(CHANNEL("Present ambient relative humidity", percentage_16)),
 };
 SENSOR_TYPE(present_amb_co2_concentration) = {
 	.id = BT_MESH_PROP_ID_PRESENT_AMB_CO2_CONCENTRATION,
@@ -694,6 +763,61 @@ SENSOR_TYPE(present_amb_voc_concentration) = {
 SENSOR_TYPE(present_amb_noise) = {
 	.id = BT_MESH_PROP_ID_PRESENT_AMB_NOISE,
 	CHANNELS(CHANNEL("Present ambient noise", noise)),
+};
+SENSOR_TYPE(present_indoor_relative_humidity) = {
+	.id = BT_MESH_PROP_ID_PRESENT_INDOOR_RELATIVE_HUMIDITY,
+	CHANNELS(CHANNEL("Humidity", percentage_16)),
+};
+SENSOR_TYPE(present_outdoor_relative_humidity) = {
+	.id = BT_MESH_PROP_ID_PRESENT_OUTDOOR_RELATIVE_HUMIDITY,
+	CHANNELS(CHANNEL("Humidity", percentage_16)),
+};
+SENSOR_TYPE(magnetic_declination) = {
+	.id = BT_MESH_PROP_ID_MAGNETIC_DECLINATION,
+	CHANNELS(CHANNEL("Magnetic Declination", direction_16)),
+};
+SENSOR_TYPE(magnetic_flux_density_2d) = {
+	.id = BT_MESH_PROP_ID_MAGNETIC_FLUX_DENSITY_2D,
+	CHANNELS(CHANNEL("X-axis", magnetic_flux_density),
+		 CHANNEL("Y-axis", magnetic_flux_density)),
+};
+SENSOR_TYPE(magnetic_flux_density_3d) = {
+	.id = BT_MESH_PROP_ID_MAGNETIC_FLUX_DENSITY_3D,
+	CHANNELS(CHANNEL("X-axis", magnetic_flux_density),
+		 CHANNEL("Y-axis", magnetic_flux_density),
+		 CHANNEL("Z-axis", magnetic_flux_density)),
+};
+SENSOR_TYPE(pollen_concentration) = {
+	.id = BT_MESH_PROP_ID_POLLEN_CONCENTRATION,
+	CHANNELS(CHANNEL("Pollen Concentration", pollen_concentration)),
+};
+SENSOR_TYPE(air_pressure) = {
+	.id = BT_MESH_PROP_ID_AIR_PRESSURE,
+	CHANNELS(CHANNEL("Pressure", pressure)),
+};
+SENSOR_TYPE(pressure) = {
+	.id = BT_MESH_PROP_ID_PRESSURE,
+	CHANNELS(CHANNEL("Pressure", pressure)),
+};
+SENSOR_TYPE(rainfall) = {
+	.id = BT_MESH_PROP_ID_RAINFALL,
+	CHANNELS(CHANNEL("Rainfall", rainfall)),
+};
+SENSOR_TYPE(true_wind_direction) = {
+	.id = BT_MESH_PROP_ID_TRUE_WIND_DIRECTION,
+	CHANNELS(CHANNEL("True Wind Direction", direction_16)),
+};
+SENSOR_TYPE(true_wind_speed) = {
+	.id = BT_MESH_PROP_ID_TRUE_WIND_SPEED,
+	CHANNELS(CHANNEL("True Wind Speed", wind_speed)),
+};
+SENSOR_TYPE(uv_index) = {
+	.id = BT_MESH_PROP_ID_UV_INDEX,
+	CHANNELS(CHANNEL("UV Index", uv_index)),
+};
+SENSOR_TYPE(wind_chill) = {
+	.id = BT_MESH_PROP_ID_WIND_CHILL,
+	CHANNELS(CHANNEL("Wind Chill", temp_8_wide)),
 };
 
 /*******************************************************************************

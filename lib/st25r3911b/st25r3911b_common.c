@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <kernel.h>
@@ -55,7 +55,7 @@ LOG_MODULE_DECLARE(st25r3911b);
 #define NFCF_LED_PIN DT_GPIO_PIN(ST25R3911B_NODE, led_nfcf_gpios)
 
 
-static struct device *gpio_dev;
+static const struct device *gpio_dev;
 
 static int command_process(uint8_t cmd, uint32_t *irq_mask, uint32_t timeout)
 {

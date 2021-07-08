@@ -3,6 +3,10 @@
 NFC: System OFF
 ###############
 
+.. contents::
+   :local:
+   :depth: 2
+
 The NFC System OFF sample shows how to make the NFC Tag device wake up from the System OFF mode when it detects the NFC field.
 The sample uses the :ref:`lib_nfc_ndef`.
 
@@ -48,7 +52,7 @@ The sample supports the following development kits:
 
 .. table-from-rows:: /includes/sample_board_rows.txt
    :header: heading
-   :rows: nrf5340pdk_nrf5340_cpuapp_and_cpuappns, nrf52840dk_nrf52840, nrf52dk_nrf52832
+   :rows: nrf5340dk_nrf5340_cpuapp_and_cpuappns, nrf52840dk_nrf52840, nrf52dk_nrf52832
 
 The sample also requires a smartphone or tablet with the NFC feature.
 
@@ -73,7 +77,7 @@ Building and running
 Testing
 =======
 
-After programming the sample to your board, test it by performing the following steps:
+After programming the sample to your development kit, test it by performing the following steps:
 
 1. Observe that LED 2 on the Tag device turns off after 3 seconds after the programming is complete.
    This indicates that the system is in the System OFF mode.

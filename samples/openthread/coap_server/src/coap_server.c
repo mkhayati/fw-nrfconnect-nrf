@@ -1,8 +1,9 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
+
 #include <zephyr.h>
 #include <dk_buttons_and_leds.h>
 #include <logging/log.h>

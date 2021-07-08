@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <bluetooth/bluetooth.h>
@@ -54,49 +54,43 @@ static const struct bt_mesh_sensor_cli_handlers bt_mesh_sensor_cli_handlers = {
 static struct bt_mesh_sensor_cli sensor_cli =
 	BT_MESH_SENSOR_CLI_INIT(&bt_mesh_sensor_cli_handlers);
 
-static struct k_delayed_work get_data_work;
+static struct k_work_delayable get_data_work;
 
 static void get_data(struct k_work *work)
 {
+	static bool req_temp_range;
 	int err;
 
-	err = bt_mesh_sensor_cli_series_entries_get(
-		&sensor_cli, NULL,
-		&bt_mesh_sensor_rel_runtime_in_a_dev_op_temp_range, NULL, NULL,
-		NULL);
-	if (err) {
-		printk("Error getting relative chip temperature data (%d)\n",
-		       err);
+	/* Only one message can be published at a time. Swap sensor after each timeout. */
+	if (req_temp_range) {
+		err = bt_mesh_sensor_cli_series_entries_get(
+			&sensor_cli, NULL,
+			&bt_mesh_sensor_rel_runtime_in_a_dev_op_temp_range, NULL, NULL,
+			NULL);
+		if (err) {
+			printk("Error getting relative chip temperature data (%d)\n",
+			       err);
+		}
+	} else {
+		err = bt_mesh_sensor_cli_get(
+			&sensor_cli, NULL, &bt_mesh_sensor_time_since_presence_detected,
+			NULL);
+		if (err) {
+			printk("Error getting time since presence detected (%d)\n",
+			       err);
+		}
 	}
 
-	err = bt_mesh_sensor_cli_get(
-		&sensor_cli, NULL, &bt_mesh_sensor_time_since_presence_detected,
-		NULL);
-	if (err) {
-		printk("Error getting time since presence detected (%d)\n",
-		       err);
-	}
+	req_temp_range = !req_temp_range;
 
-	k_delayed_work_submit(&get_data_work, K_MSEC(GET_DATA_INTERVAL));
+	k_work_schedule(&get_data_work, K_MSEC(GET_DATA_INTERVAL));
 }
-
-/** Configuration server definition */
-static struct bt_mesh_cfg_srv cfg_srv = {
-	.relay = IS_ENABLED(CONFIG_BT_MESH_RELAY),
-	.beacon = BT_MESH_BEACON_ENABLED,
-	.frnd = IS_ENABLED(CONFIG_BT_MESH_FRIEND),
-	.gatt_proxy = IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY),
-	.default_ttl = 7,
-
-	/* 3 transmissions with 20ms interval */
-	.net_transmit = BT_MESH_TRANSMIT(2, 20),
-	.relay_retransmit = BT_MESH_TRANSMIT(2, 20),
-};
 
 /* Set up a repeating delayed work to blink the DK's LEDs when attention is
  * requested.
  */
-static struct k_delayed_work attention_blink_work;
+static struct k_work_delayable attention_blink_work;
+static bool attention;
 
 static void attention_blink(struct k_work *work)
 {
@@ -108,19 +102,24 @@ static void attention_blink(struct k_work *work)
 		BIT(3) | BIT(0),
 	};
 
-	dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
-	k_delayed_work_submit(&attention_blink_work, K_MSEC(30));
+	if (attention) {
+		dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
+		k_work_reschedule(&attention_blink_work, K_MSEC(30));
+	} else {
+		dk_set_leds(DK_NO_LEDS_MSK);
+	}
 }
 
 static void attention_on(struct bt_mesh_model *mod)
 {
-	k_delayed_work_submit(&attention_blink_work, K_NO_WAIT);
+	attention = true;
+	k_work_reschedule(&attention_blink_work, K_NO_WAIT);
 }
 
 static void attention_off(struct bt_mesh_model *mod)
 {
-	k_delayed_work_cancel(&attention_blink_work);
-	dk_set_leds(DK_NO_LEDS_MSK);
+	/* Will stop rescheduling blink timer */
+	attention = false;
 }
 
 static const struct bt_mesh_health_srv_cb health_srv_cb = {
@@ -136,7 +135,7 @@ BT_MESH_HEALTH_PUB_DEFINE(health_pub, 0);
 
 static struct bt_mesh_elem elements[] = {
 	BT_MESH_ELEM(1,
-		     BT_MESH_MODEL_LIST(BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+		     BT_MESH_MODEL_LIST(BT_MESH_MODEL_CFG_SRV,
 					BT_MESH_MODEL_HEALTH_SRV(&health_srv,
 								 &health_pub),
 					BT_MESH_MODEL_SENSOR_CLI(&sensor_cli)),
@@ -151,10 +150,10 @@ static const struct bt_mesh_comp comp = {
 
 const struct bt_mesh_comp *model_handler_init(void)
 {
-	k_delayed_work_init(&attention_blink_work, attention_blink);
-	k_delayed_work_init(&get_data_work, get_data);
+	k_work_init_delayable(&attention_blink_work, attention_blink);
+	k_work_init_delayable(&get_data_work, get_data);
 
-	k_delayed_work_submit(&get_data_work, K_MSEC(GET_DATA_INTERVAL));
+	k_work_schedule(&get_data_work, K_MSEC(GET_DATA_INTERVAL));
 
 	return &comp;
 }

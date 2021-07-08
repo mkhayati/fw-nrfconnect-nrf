@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018-2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -17,13 +17,13 @@
 
 #include "event_manager.h"
 #include "motion_event.h"
-#include "power_event.h"
+#include <caf/events/power_event.h>
 #include "hid_event.h"
 #include "config_event.h"
 #include "usb_event.h"
 
 #define MODULE motion
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_MOTION_LOG_LEVEL);
@@ -70,7 +70,7 @@ static K_SEM_DEFINE(sem, 1, 1);
 static K_THREAD_STACK_DEFINE(thread_stack, THREAD_STACK_SIZE);
 static struct k_thread thread;
 
-static struct device *sensor_dev;
+static const struct device *sensor_dev;
 
 static struct sensor_state state;
 
@@ -154,7 +154,7 @@ static int settings_set(const char *key, size_t len_rd,
 SETTINGS_STATIC_HANDLER_DEFINE(motion_sensor, MODULE_NAME, NULL, settings_set,
 			       NULL, NULL);
 
-static void data_ready_handler(struct device *dev, struct sensor_trigger *trig);
+static void data_ready_handler(const struct device *dev, struct sensor_trigger *trig);
 
 
 static int enable_trigger(void)
@@ -181,7 +181,7 @@ static int disable_trigger(void)
 	return err;
 }
 
-static void data_ready_handler(struct device *dev, struct sensor_trigger *trig)
+static void data_ready_handler(const struct device *dev, struct sensor_trigger *trig)
 {
 	k_spinlock_key_t key = k_spin_lock(&state.lock);
 

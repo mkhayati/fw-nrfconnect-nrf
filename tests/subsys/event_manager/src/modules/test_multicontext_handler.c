@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -21,6 +21,7 @@ static void end_test(void)
 {
 	struct test_end_event *event = new_test_end_event();
 
+	zassert_not_null(event, "Failed to allocate event");
 	event->test_id = cur_test_id;
 
 	EVENT_SUBMIT(event);

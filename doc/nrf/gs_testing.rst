@@ -3,6 +3,10 @@
 Testing a sample application
 ############################
 
+.. contents::
+   :local:
+   :depth: 2
+
 Follow the instructions in the testing section of the sample documentation to ensure that the application runs as expected.
 
 Information about the current state of the application is usually provided through the LEDs or through UART, or through both.
@@ -13,7 +17,7 @@ See the user interface section of the sample documentation for description of th
 How to connect with PuTTY
 *************************
 
-To see the UART output, connect to the board with a terminal emulator, for example, PuTTY.
+To see the UART output, connect to the development kit with a terminal emulator, for example, PuTTY.
 
 Connect with the following settings:
 
@@ -22,6 +26,11 @@ Connect with the following settings:
  * 1 stop bit
  * No parity
  * HW flow control: None
+
+If you want to send commands via UART, make sure to configure the required line endings and turn on local echo and local line editing:
+
+.. figure:: /images/putty.svg
+   :alt: PuTTY configuration for sending commands via UART
 
 UART can also be used for logging purposes as one of the :ref:`logging backends <ug_logging_backends>`.
 
@@ -74,21 +83,21 @@ To run RTT on your platform, complete the following steps:
 How to connect with LTE Link Monitor
 ************************************
 
-To connect to nRF9160-based boards (for example, the nRF9160 DK or Nordic Thingy:91), you can also use `LTE Link Monitor`_, which is implemented in `nRF Connect for Desktop`_.
+To connect to nRF9160-based kits (for example, the nRF9160 DK or Nordic Thingy:91), you can also use `LTE Link Monitor`_, which is implemented in `nRF Connect for Desktop`_.
 This application is used to establish LTE communication with the nRF9160 modem through AT commands, and it also displays the UART output.
 
-To connect to the nRF9160-based board with LTE Link Monitor, perform the following steps:
+To connect to the nRF9160-based kit with LTE Link Monitor, perform the following steps:
 
 1. Launch the LTE Link Monitor app.
 
    .. note::
 
-      Make sure that **Automatic requests** is enabled in LTE Link Monitor.
+      Make sure that **Automatic requests** is enabled in LTE Link Monitor.
 
-#. Connect the nRF9160-based board to the PC with a USB cable.
-#. Power on the nRF9160-based board.
-#. Click **Select Device** and select the particular board entry from the drop-down list in the LTE Link Monitor.
-#. Observe that the LTE Link monitor app starts AT communication with the modem of the nRF9160-based board and shows the status of the communication in the display terminal.
+#. Connect the nRF9160-based kit to the PC with a USB cable.
+#. Power on the nRF9160-based kit.
+#. Click :guilabel:`Select Device` and select the particular kit entry from the drop-down list in the LTE Link Monitor.
+#. Observe that the LTE Link monitor app starts AT communication with the modem of the nRF9160-based kit and shows the status of the communication in the display terminal.
    The app also displays any information that is logged on UART.
 
    .. note::

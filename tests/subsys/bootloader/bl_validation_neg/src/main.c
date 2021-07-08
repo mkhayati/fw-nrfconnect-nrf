@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <ztest.h>
@@ -9,7 +9,7 @@
 #include <pm_config.h>
 #include <nrfx_nvmc.h>
 #include <linker/linker-defs.h>
-#include <power/reboot.h>
+#include <sys/reboot.h>
 #include <bl_storage.h>
 #include <fw_info.h>
 

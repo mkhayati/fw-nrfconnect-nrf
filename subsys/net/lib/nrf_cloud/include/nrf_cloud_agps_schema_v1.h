@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -36,6 +36,7 @@ enum nrf_cloud_agps_type {
 	NRF_CLOUD_AGPS_GPS_SYSTEM_CLOCK			= 7,
 	NRF_CLOUD_AGPS_LOCATION				= 8,
 	NRF_CLOUD_AGPS_INTEGRITY			= 9,
+	NRF_CLOUD_AGPS__LAST				= NRF_CLOUD_AGPS_INTEGRITY
 };
 
 struct nrf_cloud_agps_utc {

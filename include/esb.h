@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #ifndef __ESB_H
 #define __ESB_H
@@ -25,11 +25,18 @@ extern "C" {
  *        acknowledgment, and automatic retransmission of lost packets.
  */
 
-
+#if defined(CONFIG_SOC_NRF5340_CPUNET)
+/** nRF5340 Errata 29 workaround (SWI interrupts missing in network core) */
+/** The ESB event IRQ number when running on an nRF5 device. */
+#define ESB_EVT_IRQ EGU0_IRQn
+/** The handler for @ref ESB_EVT_IRQ when running on an nRF5 device. */
+#define ESB_EVT_IRQHandler EGU0_IRQHandler
+#else
 /** The ESB event IRQ number when running on an nRF5 device. */
 #define ESB_EVT_IRQ SWI0_IRQn
 /** The handler for @ref ESB_EVT_IRQ when running on an nRF5 device. */
 #define ESB_EVT_IRQHandler SWI0_IRQHandler
+#endif
 
 /** @brief Default radio parameters.
  *
@@ -114,13 +121,13 @@ enum esb_bitrate {
 	/** 2 Mb radio mode. */
 	ESB_BITRATE_2MBPS = RADIO_MODE_MODE_Nrf_2Mbit,
 #if !(defined(CONFIG_SOC_NRF52840) || defined(CONFIG_SOC_NRF52810) ||          \
-      defined(CONFIG_SOC_NRF52811))
+      defined(CONFIG_SOC_NRF52811) || defined(CONFIG_SOC_NRF5340_CPUNET))
 	/** 250 Kb radio mode. */
 	ESB_BITRATE_250KBPS = RADIO_MODE_MODE_Nrf_250Kbit,
 #endif
 	/** 1 Mb radio mode using @e Bluetooth low energy radio parameters. */
 	ESB_BITRATE_1MBPS_BLE = RADIO_MODE_MODE_Ble_1Mbit,
-#if defined(CONFIG_SOC_SERIES_NRF52X)
+#if defined(CONFIG_SOC_SERIES_NRF52X) || defined(CONFIG_SOC_NRF5340_CPUNET)
 	/** 2 Mb radio mode using @e Bluetooth low energy radio parameters. */
 	ESB_BITRATE_2MBPS_BLE = 4,
 #endif
@@ -136,7 +143,9 @@ enum esb_crc {
 /** @brief Enhanced ShockBurst radio transmission power modes. */
 enum esb_tx_power {
 	/** 4 dBm radio transmit power. */
+#if !defined(CONFIG_SOC_NRF5340_CPUNET)
 	ESB_TX_POWER_4DBM = RADIO_TXPOWER_TXPOWER_Pos4dBm,
+#endif
 #if defined(CONFIG_SOC_SERIES_NRF52X)
 	/** 3 dBm radio transmit power. */
 	ESB_TX_POWER_3DBM = RADIO_TXPOWER_TXPOWER_Pos3dBm,
@@ -377,7 +386,7 @@ int esb_set_base_address_1(const uint8_t *addr);
  *
  *  @param[in] prefixes		Prefixes for each pipe.
  *  @param[in] num_pipes	Number of pipes. Must be less than or equal to
- *				@em CONFIG_ESB_PIPE_COUNT.
+ *				@option{CONFIG_ESB_PIPE_COUNT}.
  *
  * @retval 0 If successful.
  *           Otherwise, a (negative) error code is returned.
@@ -388,7 +397,7 @@ int esb_set_prefixes(const uint8_t *prefixes, uint8_t num_pipes);
  *
  *  The @p enable_mask parameter must contain the same number of pipes as has
  *  been configured with @ref esb_set_prefixes. This number may not be
- *  greater than the number defined by @em CONFIG_ESB_PIPE_COUNT
+ *  greater than the number defined by @option{CONFIG_ESB_PIPE_COUNT}
  *
  *  @param enable_mask	Bitfield mask to enable or disable pipes.
  *			Setting a bit to 0 disables the pipe.

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <ztest.h>
@@ -9,7 +9,7 @@
 #include <zephyr.h>
 
 #include <zboss_api.h>
-#include <zigbee_helpers.h>
+#include <zigbee/zigbee_app_utils.h>
 #include <zb_nrf_platform.h>
 
 
@@ -80,7 +80,7 @@ void test_zboss_startup_signals(void)
 
 K_MSGQ_DEFINE(zb_callback_queue, sizeof(uint32_t), N_THREADS, 4);
 
-void add_to_queue_from_callback(uint8_t int_to_put)
+static void add_to_queue_from_callback(uint8_t int_to_put)
 {
 	const uint32_t ref_int[N_THREADS] = {0, 1, 2, 3};
 	int ret_val;
@@ -156,7 +156,7 @@ void test_zboss_app_callbacks(void)
 	}
 
 	for (uint8_t i = 0; i < ARRAY_SIZE(thread_id_array); i++) {
-		int data;
+		int data = 0;
 		int err = k_msgq_get(&zb_callback_queue, &data, K_NO_WAIT);
 
 		zassert_equal(err, 0,

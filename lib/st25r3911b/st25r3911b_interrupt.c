@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <kernel.h>
@@ -25,14 +25,14 @@ LOG_MODULE_DECLARE(st25r3911b);
 #define IRQ_PIN DT_GPIO_PIN(ST25R3911B_NODE, irq_gpios)
 
 static struct gpio_callback gpio_cb;
-static struct device *gpio_dev;
+static const struct device *gpio_dev;
 
 static struct k_spinlock spinlock;
 static struct k_sem *sem;
 
 static uint32_t irq_mask;
 
-static void irq_pin_cb(struct device *gpiob, struct gpio_callback *cb,
+static void irq_pin_cb(const struct device *gpiob, struct gpio_callback *cb,
 		       uint32_t pins)
 {
 	k_sem_give(sem);
@@ -117,7 +117,7 @@ int st25r3911b_irq_modify(uint32_t clr_mask, uint32_t set_mask)
 	int err = 0;
 	uint32_t mask;
 	uint32_t old_mask;
-	struct k_spinlock_key key;
+	k_spinlock_key_t key;
 
 	key = k_spin_lock(&spinlock);
 

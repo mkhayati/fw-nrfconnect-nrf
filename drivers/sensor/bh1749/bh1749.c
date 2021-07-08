@@ -16,8 +16,8 @@
 
 #include "bh1749.h"
 
-static struct k_delayed_work bh1749_init_work;
-static struct device *bh1749_dev;
+static struct k_work_delayable bh1749_init_work;
+static const struct device *bh1749_dev;
 
 LOG_MODULE_REGISTER(BH1749, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -40,7 +40,7 @@ static int(*const async_init_fn[ASYNC_INIT_STEP_COUNT])(
 	[ASYNC_INIT_STEP_CONFIGURE] = bh1749_async_init_configure,
 };
 
-static int bh1749_sample_fetch(struct device *dev, enum sensor_channel chan)
+static int bh1749_sample_fetch(const struct device *dev, enum sensor_channel chan)
 
 {
 	struct bh1749_data *data = dev->data;
@@ -101,7 +101,7 @@ static int bh1749_sample_fetch(struct device *dev, enum sensor_channel chan)
 	return 0;
 }
 
-static int bh1749_channel_get(struct device *dev,
+static int bh1749_channel_get(const struct device *dev,
 			      enum sensor_channel chan,
 			      struct sensor_value *val)
 {
@@ -176,7 +176,7 @@ static int bh1749_check(struct bh1749_data *data)
 	return 0;
 }
 
-static int bh1749_sw_reset(struct device *dev)
+static int bh1749_sw_reset(const struct device *dev)
 {
 	return i2c_reg_update_byte(dev, DT_REG_ADDR(DT_DRV_INST(0)),
 				   BH1749_SYSTEM_CONTROL,
@@ -204,8 +204,6 @@ static void bh1749_async_init(struct k_work *work)
 
 	ARG_UNUSED(work);
 
-
-
 	LOG_DBG("BH1749 async init step %d", data->async_init_step);
 
 	data->err = async_init_fn[data->async_init_step](data);
@@ -219,8 +217,8 @@ static void bh1749_async_init(struct k_work *work)
 			data->ready = true;
 			LOG_INF("BH1749 initialized");
 		} else {
-			k_delayed_work_submit(&bh1749_init_work,
-					      K_MSEC(async_init_delay[data->async_init_step]));
+			k_work_schedule(&bh1749_init_work,
+					K_MSEC(async_init_delay[data->async_init_step]));
 		}
 	}
 }
@@ -279,7 +277,7 @@ static int bh1749_async_init_configure(struct bh1749_data *data)
 	return 0;
 }
 
-static int bh1749_init(struct device *dev)
+static int bh1749_init(const struct device *dev)
 {
 	bh1749_dev = dev;
 
@@ -292,9 +290,9 @@ static int bh1749_init(struct device *dev)
 
 		return -EINVAL;
 	}
-	k_delayed_work_init(&bh1749_init_work, bh1749_async_init);
-	return k_delayed_work_submit(&bh1749_init_work,
-				     K_MSEC(async_init_delay[data->async_init_step]));
+	k_work_init_delayable(&bh1749_init_work, bh1749_async_init);
+	k_work_schedule(&bh1749_init_work, K_MSEC(async_init_delay[data->async_init_step]));
+	return 0;
 };
 
 static const struct sensor_driver_api bh1749_driver_api = {
@@ -309,5 +307,5 @@ static const struct sensor_driver_api bh1749_driver_api = {
 static struct bh1749_data bh1749_data;
 
 DEVICE_DEFINE(bh1749, DT_INST_LABEL(0),
-	      bh1749_init, device_pm_control_nop, &bh1749_data, NULL,
+	      bh1749_init, NULL, &bh1749_data, NULL,
 	      POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY, &bh1749_driver_api);

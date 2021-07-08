@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -13,7 +13,7 @@
 #include "battery_event.h"
 
 #define MODULE bas
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_BAS_LOG_LEVEL);
@@ -59,7 +59,9 @@ static bool event_handler(const struct event_header *eh)
 			int err = bt_gatt_notify(NULL, &bas_svc.attrs[1],
 						 &battery, sizeof(battery));
 
-			if (err) {
+			if (err == -ENOTCONN) {
+				LOG_WRN("Cannot notify. Peer disconnecting.");
+			} else if (err) {
 				LOG_ERR("GATT notify failed (err=%d)", err);
 			}
 		}

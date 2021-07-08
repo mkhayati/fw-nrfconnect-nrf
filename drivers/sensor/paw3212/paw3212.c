@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -111,16 +111,16 @@ enum async_init_step {
 };
 
 struct paw3212_data {
-	struct device                *cs_gpio_dev;
-	struct device                *irq_gpio_dev;
-	struct device                *spi_dev;
+	const struct device          *cs_gpio_dev;
+	const struct device          *irq_gpio_dev;
+	const struct device          *spi_dev;
 	struct gpio_callback         irq_gpio_cb;
 	struct k_spinlock            lock;
-	int16_t                        x;
-	int16_t                        y;
+	int16_t                      x;
+	int16_t                      y;
 	sensor_trigger_handler_t     data_ready_handler;
 	struct k_work                trigger_handler_work;
-	struct k_delayed_work        init_work;
+	struct k_work_delayable      init_work;
 	enum async_init_step         async_init_step;
 	int                          err;
 	bool                         ready;
@@ -153,8 +153,6 @@ static int (* const async_init_fn[ASYNC_INIT_STEP_COUNT])(struct paw3212_data *d
 
 
 static struct paw3212_data paw3212_data;
-DEVICE_DECLARE(paw3212);
-
 
 static int16_t expand_s12(int16_t x)
 {
@@ -536,7 +534,7 @@ static int toggle_sleep_modes(struct paw3212_data *dev_data, uint8_t reg_addr1, 
 	return err;
 }
 
-static void irq_handler(struct device *gpiob, struct gpio_callback *cb,
+static void irq_handler(const struct device *gpiob, struct gpio_callback *cb,
 			uint32_t pins)
 {
 	int err;
@@ -570,7 +568,7 @@ static void trigger_handler(struct k_work *work)
 		.chan = SENSOR_CHAN_ALL,
 	};
 
-	handler(DEVICE_GET(paw3212), &trig);
+	handler(DEVICE_DT_INST_GET(0), &trig);
 
 	key = k_spin_lock(&paw3212_data.lock);
 	if (paw3212_data.data_ready_handler) {
@@ -663,8 +661,8 @@ static void paw3212_async_init(struct k_work *work)
 			dev_data->ready = true;
 			LOG_INF("PAW3212 initialized");
 		} else {
-			k_delayed_work_submit(&dev_data->init_work,
-					      K_MSEC(async_init_delay[
+			k_work_schedule(&dev_data->init_work,
+					K_MSEC(async_init_delay[
 						dev_data->async_init_step]));
 		}
 	}
@@ -735,7 +733,7 @@ static int paw3212_init_spi(struct paw3212_data *dev_data)
 	return 0;
 }
 
-static int paw3212_init(struct device *dev)
+static int paw3212_init(const struct device *dev)
 {
 	struct paw3212_data *dev_data = &paw3212_data;
 	int err;
@@ -762,16 +760,15 @@ static int paw3212_init(struct device *dev)
 		return err;
 	}
 
-	k_delayed_work_init(&dev_data->init_work, paw3212_async_init);
+	k_work_init_delayable(&dev_data->init_work, paw3212_async_init);
 
-	k_delayed_work_submit(&dev_data->init_work,
-			      K_MSEC(async_init_delay[
-				dev_data->async_init_step]));
+	k_work_schedule(&dev_data->init_work,
+			K_MSEC(async_init_delay[dev_data->async_init_step]));
 
 	return err;
 }
 
-static int paw3212_sample_fetch(struct device *dev, enum sensor_channel chan)
+static int paw3212_sample_fetch(const struct device *dev, enum sensor_channel chan)
 {
 	struct paw3212_data *dev_data = &paw3212_data;
 	uint8_t motion_status;
@@ -841,7 +838,7 @@ static int paw3212_sample_fetch(struct device *dev, enum sensor_channel chan)
 	return err;
 }
 
-static int paw3212_channel_get(struct device *dev, enum sensor_channel chan,
+static int paw3212_channel_get(const struct device *dev, enum sensor_channel chan,
 			       struct sensor_value *val)
 {
 	struct paw3212_data *dev_data = &paw3212_data;
@@ -871,7 +868,7 @@ static int paw3212_channel_get(struct device *dev, enum sensor_channel chan,
 	return 0;
 }
 
-static int paw3212_trigger_set(struct device *dev,
+static int paw3212_trigger_set(const struct device *dev,
 			       const struct sensor_trigger *trig,
 			       sensor_trigger_handler_t handler)
 {
@@ -914,7 +911,7 @@ static int paw3212_trigger_set(struct device *dev,
 	return err;
 }
 
-static int paw3212_attr_set(struct device *dev, enum sensor_channel chan,
+static int paw3212_attr_set(const struct device *dev, enum sensor_channel chan,
 			    enum sensor_attribute attr,
 			    const struct sensor_value *val)
 {
@@ -995,6 +992,6 @@ static const struct sensor_driver_api paw3212_driver_api = {
 	.attr_set     = paw3212_attr_set,
 };
 
-DEVICE_AND_API_INIT(paw3212, DT_INST_LABEL(0), paw3212_init,
-		    NULL, NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
-		    &paw3212_driver_api);
+DEVICE_DT_INST_DEFINE(0, paw3212_init, NULL,
+		      NULL, NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+		      &paw3212_driver_api);

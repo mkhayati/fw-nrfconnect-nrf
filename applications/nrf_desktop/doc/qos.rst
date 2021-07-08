@@ -3,6 +3,10 @@
 Quality of Service module
 #########################
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Quality of Service (QoS) module provides the QoS information through the Bluetooth GATT service.
 The module can be used only by nRF Desktop peripheral with the SoftDevice Link Layer (:option:`CONFIG_BT_LL_SOFTDEVICE`).
 
@@ -30,7 +34,7 @@ Configuration
 
 The module requires the basic Bluetooth configuration, as described in :ref:`nrf_desktop_bluetooth_guide`.
 
-The module is enabled with ``CONFIG_DESKTOP_QOS_ENABLE`` option.
+The module is enabled with :option:`CONFIG_DESKTOP_QOS_ENABLE` option.
 The module is available on the :ref:`peripheral devices <nrf_desktop_bluetooth_guide_peripheral>` only and requires the :ref:`nrf_desktop_ble_qos` to be enabled.
 
 Implementation details

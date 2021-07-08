@@ -1,7 +1,7 @@
 # UART configuration
 
 # Copyright (c) 2020, Nordic Semiconductor ASA
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 
 config NRF_SW_LPUART
 	bool "Low Power UART using REQ/RDY lines"
@@ -12,6 +12,25 @@ config NRF_SW_LPUART
 	  communication with 2 pins protocol for receiver wake up and flow control.
 
 if NRF_SW_LPUART
+
+config NRF_SW_LPUART_INIT_PRIORITY
+	int "Initialization priority"
+	default 45
+	help
+	  Initialization priority within POST_KERNEL level. It should be set to
+	  a value that ensures that device is initialized later than gpio and
+	  uart devices used by this device. Default is set to be between
+	  default (KERNEL_INIT_PRIORITY_DEFAULT) and device
+	  (KERNEL_INIT_PRIORITY_DEVICE).
+
+config NRF_SW_LPUART_HFXO_ON_RX
+	bool "Turn on HFXO for RX"
+	default y
+	help
+	  According to the UART specification high frequency RC oscillator is
+	  not accurate enough. However, in normal conditions and accurate clock
+	  on the transmitter side it may be accepted to disable it. Turning on
+	  HFXO prolongs receiver activation for up to 3 milliseconds.
 
 config NRF_SW_LPUART_MAX_PACKET_SIZE
 	int "Maximum RX packet size"
@@ -24,7 +43,7 @@ config NRF_SW_LPUART_DEFAULT_TX_TIMEOUT
 	int "TX Timeout in milliseconds"
 	default 1000
 	help
-	  Timeout is used in uart_poll_out and uart_fifo_fill (in interrupt
+	  Timeout is used in uart_poll_out and uart_fifo_fill (if interrupt
 	  driven API is enabled).
 
 config NRF_SW_LPUART_INT_DRIVEN

@@ -3,13 +3,16 @@
 OpenThread architectures
 ########################
 
+.. contents::
+   :local:
+   :depth: 2
+
 This page describes the OpenThread stack architecture and platform designs that are possible with the OpenThread network stack on Nordic Semiconductor devices in |NCS|.
 
-The designs are described from the least to the most complex, that is from simple applications that consist of a single chip running single or multiple protocols to scenarios in which the nRF SoC acts as a network co-processor when the application is running on a much more powerful host processor.
-
-.. contents::
-    :local:
-    :depth: 1
+The designs are described from the least complex to the most complex, starting with System-on-Chip designs.
+These are simple applications that consist of a single chip running a single protocol or multiple protocols.
+Co-processor designs, on the other hand, require two processors.
+The nRF SoC acts as a network co-processor, while the application is running on a much more powerful host processor.
 
 .. _openthread_stack_architecture:
 
@@ -30,182 +33,167 @@ This can be done per platform, while retaining the ability to default to a stand
 System-on-Chip designs
 **********************
 
-This single-chip solution has the combined RFIC (the IEEE 802.15.4 in case of Thread) and processor.
-OpenThread and the application layer run on the local processor.
+A single-chip solution uses the RFIC (the IEEE 802.15.4 in case of Thread) and the processor of a single SoC.
+
+In these designs, OpenThread and the application layer run on the same local processor.
 
 .. _thread_architectures_designs_soc_designs_single:
 
 Single-chip, single protocol (SoC)
 ==================================
 
-In this design, the application layer and OpenThread run on the same processor.
+In this design, the only wireless protocol that is used is Thread.
+OpenThread and the application layer run on the same processor.
 The application uses the OpenThread APIs and IPv6 stack directly.
 
-This is the SoC design most commonly used for applications that do not make heavy computations or are battery powered.
+This SoC design is most commonly used for applications that do not make heavy computations or are battery-powered.
 
 This design has the following advantages:
 
-* Lowest cost.
-* Lowest power consumption.
-* Lowest complexity.
+* The radio and the general MCU functionalities are combined into one chip, resulting in a low cost.
+* Power consumption is lower than in all other designs.
+* Complexity is lower than in all other designs.
 
-It also has the following disadvantages:
+It has the following disadvantages:
 
-* For some uses, the nRF528xx MCU can be too slow. For example, when the application would like to do complex data processing.
-* The application and the network share Flash and RAM space, which can limit the application functionality.
+* For some use cases, the nRF52 Series and nRF53 Series MCUs can be too slow (for example, when the application does complex data processing).
+* The application and the network share flash and RAM space, which can limit the application functionality.
 * Dual-bank DFU or an external flash is needed to update the firmware.
 
 .. figure:: /images/thread_platform_design_soc.svg
-   :alt: Thread-only architecture
+   :alt: Thread-only architecture (nRF52)
 
-   Thread-only architecture
+   Thread-only architecture on nRF52 Series devices
+
+.. figure:: /images/thread_platform_design_nRF53.svg
+   :alt: Thread-only architecture (nRF53)
+
+   Thread-only architecture on nRF53 Series devices
 
 This platform design is suitable for the following development kits:
 
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|Hardware platforms              |PCA        |Board name                                      |Build target                   |
-+================================+===========+================================================+===============================+
-|:ref:`nRF52840 DK <ug_nrf52>`   |PCA10056   |:ref:`nrf52840dk_nrf52840 <nrf52840dk_nrf52840>`|``nrf52840dk_nrf52840``        |
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|:ref:`nRF52833 DK <ug_nrf52>`   |PCA10010   |:ref:`nrf52833dk_nrf52833 <nrf52833dk_nrf52833>`|``nrf52833dk_nrf52833``        |
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|:ref:`nRF5340 PDK <ug_nrf5340>` |PCA10095   |:ref:`nrf5340pdk_nrf5340 <nrf5340pdk_nrf5340>`  |``nrf5340pdk_nrf5340_cpuapp``  |
-|                                |           |                                                |``nrf5340pdk_nrf5340_cpuappns``|
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-
-.. note::
-    |5340_not_supported|
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833, nrf5340dk_nrf5340_cpuapp_and_cpuappns, nrf21540dk_nrf52840
 
 .. _thread_architectures_designs_soc_designs_multiprotocol:
 
 Single-chip, multiprotocol (SoC)
 ================================
 
-With nRF52840 and nRF52833 supporting multiple wireless technologies, including IEEE 802.15.4 and Bluetooth Low Energy (|BLE|), the application layer and OpenThread still run on the same processor.
+nRF52 and nRF53 Series devices support multiple wireless technologies, including IEEE 802.15.4 and Bluetooth Low Energy (Bluetooth LE).
 
-In this multiprotocol design, the SoC ensures either dynamic or switched Thread and |BLE| connectivity.
+In a single-chip, multiprotocol design, the application layer and OpenThread run on the same processor.
 
 This design has the following advantages:
 
-* It leverages the benefits of highly integrated SoC, resulting in the lowest cost and the lowest power consumption.
-* It allows to run Thread and |BLE| simultaneously on a single chip, which reduces the overall BOM cost.
+* It leverages the benefits of a highly integrated SoC, resulting in low cost and low power consumption.
+* It allows to run Thread and Bluetooth LE simultaneously on a single chip, which reduces the overall BOM cost.
 
-It also has the following disadvantages:
+It has the following disadvantages:
 
-* |BLE| activity can degrade the connectivity on Thread if not implemented with efficiency in mind.
+* Bluetooth LE activity can degrade the connectivity on Thread if not implemented with efficiency in mind.
 
 .. figure:: /images/thread_platform_design_multi.svg
-   :alt: Multiprotocol Thread and |BLE| architecture
+   :alt: Multiprotocol Thread and Bluetooth LE architecture (nRF52)
 
-   Multiprotocol Thread and |BLE| architecture
+   Multiprotocol Thread and Bluetooth LE architecture on nRF52 Series devices
+
+.. figure:: /images/thread_platform_design_nRF53_multi.svg
+   :alt: Multiprotocol Thread and Bluetooth LE architecture (nRF53)
+
+   Multiprotocol Thread and Bluetooth LE architecture on nRF53 Series devices
+
+For more information about the multiprotocol feature, see :ref:`ug_multiprotocol_support`.
 
 This platform design is suitable for the following development kits:
 
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|Hardware platforms              |PCA        |Board name                                      |Build target                   |
-+================================+===========+================================================+===============================+
-|:ref:`nRF52840 DK <ug_nrf52>`   |PCA10056   |:ref:`nrf52840dk_nrf52840 <nrf52840dk_nrf52840>`|``nrf52840dk_nrf52840``        |
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|:ref:`nRF52833 DK <ug_nrf52>`   |PCA10010   |:ref:`nrf52833dk_nrf52833 <nrf52833dk_nrf52833>`|``nrf52833dk_nrf52833``        |
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|:ref:`nRF5340 PDK <ug_nrf5340>` |PCA10095   |:ref:`nrf5340pdk_nrf5340 <nrf5340pdk_nrf5340>`  |``nrf5340pdk_nrf5340_cpuapp``  |
-|                                |           |                                                |                               |
-|                                |           |                                                |``nrf5340pdk_nrf5340_cpuappns``|
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-
-.. note::
-    |5340_not_supported|
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833, nrf5340dk_nrf5340_cpuapp_and_cpuappns
 
 .. _thread_architectures_designs_cp:
 
 Co-processor designs
 ********************
 
-In the co-processor designs, with either network co-processor (NCP) or radio co-processor (RCP), the application layer runs on a host processor and communicates with OpenThread through a serial connection using a standardized host-controller protocol (Spinel).
-OpenThread can run on either the radio or the host processor.
+In co-processor designs, the application runs on one processor (the host processor) and communicates with another processor that provides the Thread radio.
+The communication happens through a serial connection using a standardized host-controller protocol (Spinel).
 
-.. contents::
-    :local:
-    :depth: 1
+OpenThread runs on either the radio processor or the host processor, depending on whether a network co-processor (NCP) design or a radio co-processor (RCP) design is chosen.
 
 .. _thread_architectures_designs_cp_ncp:
 
-Network Co-Processor (NCP)
+Network co-processor (NCP)
 ==========================
 
-The standard NCP design has Thread features on the SoC and runs the application layer on a host processor, which is typically more capable than the OpenThread device, although it has greater power demands.
-The host processor communicates with the OpenThread device through a serial interface (typically UART or SPI) over the Spinel protocol.
+In the standard NCP design, the full OpenThread stack runs on the processor that provides the Thread radio (the *network processor*), and the application layer runs on a host processor.
+The host processor is typically more capable than the network processor, but it has greater power demands.
+The host processor communicates with the network processor through a serial interface (typically UART or SPI) over the Spinel protocol.
 
 This design is useful for gateway devices or devices that have other processing demands, like IP cameras and speakers.
 
 This design has the following advantages:
 
-* The higher-power host can sleep, while the lower-power OpenThread device remains active to maintain its place in the Thread network.
-* Since the SoC is not tied to the application layer, development and testing of applications is independent of the OpenThread build.
-* Only the network stack and a thin application reside on the NCP, which reduces the cost of the chip (RAM and Flash usage may be smaller than in an SoC solution with the application).
-* It does not require the support for the dual-bank DFU.
-  (Host can just replace the old image with a new one.)
+* The higher-power host can sleep, while the lower-power network processor remains active to maintain its place in the Thread network.
+* Since the network processor is not tied to the application layer, development and testing of applications is independent of the OpenThread build.
+* When choosing an advanced and powerful host processor, applications can be very complex.
+* Only the network stack and a thin application reside on the network processor, which reduces the cost of the chip.
+  RAM and flash usage are usually smaller than in a single-chip solution.
+* This design does not require support for dual-bank DFU, because the host can just replace the old image with a new one.
 
-It also has the following disadvantages:
+It has the following disadvantages:
 
-* This is the most expensive option, since it requires the application processor.
+* This is a more expensive option, because it requires a host processor for the application.
 
 .. figure:: /images/thread_platform_design_ncp.svg
-   :alt: Network Co-Processor architecture
+   :alt: Network co-processor architecture
 
-   Network Co-Processor architecture
+   Network co-processor architecture
 
 .. note::
     |connection_options_limited|
 
 This platform design is suitable for the following development kits:
 
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|Hardware platforms              |PCA        |Board name                                      |Build target                   |
-+================================+===========+================================================+===============================+
-|:ref:`nRF52840 DK <ug_nrf52>`   |PCA10056   |:ref:`nrf52840dk_nrf52840 <nrf52840dk_nrf52840>`|``nrf52840dk_nrf52840``        |
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|:ref:`nRF52833 DK <ug_nrf52>`   |PCA10010   |:ref:`nrf52833dk_nrf52833 <nrf52833dk_nrf52833>`|``nrf52833dk_nrf52833``        |
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-|:ref:`nRF5340 PDK <ug_nrf5340>` |PCA10095   |:ref:`nrf5340pdk_nrf5340 <nrf5340pdk_nrf5340>`  |``nrf5340pdk_nrf5340_cpuapp``  |
-|                                |           |                                                |                               |
-|                                |           |                                                |``nrf5340pdk_nrf5340_cpuappns``|
-+--------------------------------+-----------+------------------------------------------------+-------------------------------+
-
-.. note::
-    |5340_not_supported|
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833, nrf21540dk_nrf52840
 
 .. _thread_architectures_designs_cp_rcp:
 
-Radio Co-Processor (RCP)
+Radio co-processor (RCP)
 ========================
 
-.. warning::
-    The RCP architecture is currently not supported in |NCS|.
-
-This is a variant of the NCP design where the core of OpenThread lives on the host processor with only a minimal "controller" on the device with the Thread radio.
-The host processor typically does not sleep in this design, in part to ensure reliability of the Thread network.
+This is a variant of the NCP design where the core of OpenThread runs on the host processor, with only a minimal "controller" running on the device with the Thread radio.
+In this design, the host processor typically does not sleep, to ensure reliability of the Thread network.
 
 This design is useful for devices that are less sensitive to power constraints.
-For example, the host processor on a video camera is always on to process video.
 
 This design has the following advantages:
 
-* OpenThread can use the resources on the more powerful processor.
-* It enables the usage of a co-processor that is less capable in comparison with the NCP solution, which reduces the cost.
+* OpenThread can use the resources on the more powerful host processor.
+* When choosing an advanced and powerful host processor, applications can be very complex.
+* It is possible to use a radio co-processor that is less capable than what is needed in the NCP design, which reduces the cost.
 
-It also has the following disadvantages:
+It has the following disadvantages:
 
-* The application processor must be woken up on each received frame, even in case a frame must be forwarded to the neighboring device.
-* The RCP solution can be less responsive than NCP solution, due to the fact that each frame or command must be communicated over the serial link with the application processor (host).
+* The host processor must be woken up on each received frame, even if a frame must be forwarded to the neighboring device.
+* The RCP solution can be less responsive than the NCP solution, due to the fact that each frame or command must be communicated to the host processor over the serial link.
 
 .. figure:: /images/thread_platform_design_rcp.svg
-   :alt: Radio Co-Processor architecture
+   :alt: Radio co-processor architecture
 
-   Radio Co-Processor architecture
+   Radio co-processor architecture
 
 .. note::
     |connection_options_limited|
+
+This platform design is suitable for the following development kits:
+
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833, nrf21540dk_nrf52840
 
 .. _ug_thread_architectures_communication:
 
@@ -225,7 +213,7 @@ Since the Spinel protocol does not enforce any prioritization for writing data, 
 * Low priority -- for data in the TX buffer that can be delayed or can be dropped if a high priority message is awaiting to be written.
 
 When the buffer is full, some of the low priority frames cannot be dropped and are delayed for later transmission.
-This happens for example with the @ref thread_update_commands "Unsolicited update commands", where the low priority frames are themselves prioritized in the following order:
+This happens for example with the :ref:`ug_thread_update_commands`, where the low priority frames are themselves prioritized in the following order:
 
 * Frames that can be delayed for later transmission ("delayable frames").
 * Frames that cannot be delayed and are dropped when the TX buffer is full ("droppable frames").
@@ -387,5 +375,9 @@ However, when using NCP with Zephyr, there is still a possibility that NCP will 
 This happens when some critical errors occur in Zephyr and the system wants to provide as much information about the failure as possible without using interrupts.
 This exception applies mainly to log messages and is done by turning off UART interrupts and flushing everything from the TX buffer without encoding it.
 
+----
+
+|Google_CCLicense|
+The source page is available `here <OpenThread system architecture_>`_.
+
 .. |connection_options_limited| replace:: Spinel connections through SPI and USB are not currently available.
-.. |5340_not_supported| replace:: :ref:`nRF5340 PDK <ug_nrf5340>` is not yet supported by Thread in |NCS|.

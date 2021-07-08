@@ -1,20 +1,20 @@
 #
 # Copyright (c) 2019 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menu "AT Command driver"
 
 config AT_CMD
 	bool "AT Command driver"
-	depends on BSD_LIBRARY
+	depends on NRF_MODEM_LIB
 
 if AT_CMD
 
 config AT_CMD_SYS_INIT
 	bool "Initialize the AT Command driver during system init"
-	default y if BSD_LIBRARY_SYS_INIT
+	default y if NRF_MODEM_LIB_SYS_INIT
 
 if AT_CMD_SYS_INIT
 
@@ -32,7 +32,8 @@ config AT_CMD_THREAD_PRIO
 
 config AT_CMD_THREAD_STACK_SIZE
 	int "AT thread stack size"
-	default 1024
+	default 1472 if LTE_LINK_CONTROL
+	default 1344
 
 config AT_CMD_QUEUE_LEN
 	int "Maximum number of queued AT commands"

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <sys/atomic.h>
@@ -13,12 +13,19 @@
 #ifdef ZB_USE_SLEEP
 static volatile atomic_t is_sleeping = ATOMIC_INIT(0);
 
+/**
+ * Enable ability to stop timer to save power.
+ */
+void zb_timer_enable_stop(void);
+
 
 /**
  *  SoC sleep subsystem initialization
  */
 void zb_osif_sleep_init(void)
 {
+	/* Disable timer in inactivity periods on all device types. */
+	zb_timer_enable_stop();
 }
 
 /**@brief Function which tries to put the MMCU into sleep mode,

@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _PASSKEY_BUTTONS_H_
 #define _PASSKEY_BUTTONS_H_
 
-#include "key_id.h"
+#include <caf/key_id.h>
 
 #define DIGIT_CNT 10
 

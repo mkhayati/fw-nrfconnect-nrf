@@ -3,16 +3,13 @@
 Zigbee: Light bulb
 ##################
 
-This Zigbee light bulb sample demonstrates a simple light bulb whose brightness can be regulated by another device.
+.. contents::
+   :local:
+   :depth: 2
+
+This :ref:`Zigbee <ug_zigbee>` light bulb sample demonstrates a simple light bulb whose brightness can be regulated by another device.
 
 You can use this sample with the :ref:`Zigbee network coordinator <zigbee_network_coordinator_sample>` and the :ref:`Zigbee light switch <zigbee_light_switch_sample>` to set up a basic Zigbee network.
-
-Overview
-********
-
-The Zigbee light bulb sample takes the Zigbee Router role and implements the Dimmable Light profile.
-This profile allows changing the brightness level of a LED of the light bulb.
-In the default sample configuration, the changes to the light bulb brightness are reflected on **LED 4**.
 
 Requirements
 ************
@@ -21,7 +18,7 @@ The sample supports the following development kits:
 
 .. table-from-rows:: /includes/sample_board_rows.txt
    :header: heading
-   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833
+   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833, nrf5340dk_nrf5340_cpuapp, nrf21540dk_nrf52840
 
 You can use one or more of the development kits listed above and mix different development kits.
 
@@ -30,7 +27,23 @@ For this sample to work, the following samples also need to be programmed:
 * The :ref:`Zigbee network coordinator <zigbee_network_coordinator_sample>` sample on one separate device.
 * The :ref:`Zigbee light switch <zigbee_light_switch_sample>` sample on one or more separate devices.
 
+Overview
+********
 
+The Zigbee light bulb sample takes the Zigbee Router role and implements the Dimmable Light profile.
+This profile allows changing the brightness level of a LED of the light bulb.
+
+Configuration
+*************
+
+|config|
+
+FEM support
+===========
+
+.. |fem_file_path| replace:: :file:`samples/zigbee/common`
+
+.. include:: /includes/sample_fem_support.txt
 
 User interface
 **************
@@ -39,7 +52,7 @@ LED 3:
     Turns on when the light bulb joins the network.
 
 LED 4:
-    Indicates the dimmable light option.
+    Indicates the dimmable light option, that is changes to the light bulb brightness.
     It can be controlled by another Zigbee device in the network, for example a light switch.
 
 Button 4:
@@ -82,17 +95,17 @@ Dependencies
 
 This sample uses the following |NCS| libraries:
 
+* :file:`include/zigbee/zigbee_error_handler.h`
+* :ref:`lib_zigbee_application_utilities`
 * Zigbee subsystem:
 
   * :file:`zb_nrf_platform.h`
-  * :file:`zigbee_helpers.h`
-  * :file:`zb_error_handler.h`
 
 * :ref:`dk_buttons_and_leds_readme`
 
-This sample uses the following `nrfxlib`_ libraries:
+This sample uses the following `sdk-nrfxlib`_ libraries:
 
-* :ref:`nrfxlib:zboss`
+* :ref:`nrfxlib:zboss` |zboss_version| (`API documentation`_)
 
 In addition, it uses the following Zephyr libraries:
 

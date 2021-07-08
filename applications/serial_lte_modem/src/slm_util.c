@@ -1,13 +1,14 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
 #include "slm_util.h"
+#include <net/socket.h>
 
 #define PRINTABLE_ASCII(ch) (ch > 0x1f && ch < 0x7f)
 
@@ -79,6 +80,24 @@ bool slm_util_hex_check(const uint8_t *data, uint16_t data_len)
 }
 
 /**
+ * @brief Detect hexdecimal string data type
+ */
+bool slm_util_hexstr_check(const uint8_t *data, uint16_t data_len)
+{
+	for (int i = 0; i < data_len; i++) {
+		char ch = *(data + i);
+
+		if ((ch < '0' || ch > '9') &&
+		    (ch < 'A' || ch > 'F') &&
+		    (ch < 'a' || ch > 'f')) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
  * @brief Encode hex array to hexdecimal string (ASCII text)
  */
 int slm_util_htoa(const uint8_t *hex, uint16_t hex_len,
@@ -115,6 +134,9 @@ int slm_util_atoh(const char *ascii, uint16_t ascii_len,
 	if (ascii_len > (hex_len * 2)) {
 		return -EINVAL;
 	}
+	if (!slm_util_hexstr_check(ascii, ascii_len)) {
+		return -EINVAL;
+	}
 
 	hex_str[2] = '\0';
 	for (int i = 0; (i * 2) < ascii_len; i++) {
@@ -134,12 +156,60 @@ bool check_for_ipv4(const char *address, uint8_t length)
 	for (index = 0; index < length; index++) {
 		char ch = *(address + index);
 
-		if ((ch == '.') || (ch >= '0' && ch <= '9')) {
-			continue;
-		} else {
+		if ((ch != '.') && (ch < '0' || ch > '9')) {
 			return false;
 		}
 	}
 
 	return true;
+}
+
+/**brief use AT command to get IPv4 address
+ */
+bool util_get_ipv4_addr(char *address)
+{
+	int err;
+	char at_rsp[128];
+	char *tmp1, *tmp2;
+
+	err = at_cmd_write("AT+CGPADDR", at_rsp, sizeof(at_rsp), NULL);
+	if (err) {
+		return false;
+	}
+	/* parse +CGPADDR: 0,"10.145.192.136" */
+	tmp1 = strstr(at_rsp, "\"");
+	if (tmp1 == NULL) {
+		return false;
+	}
+	tmp1++;
+	tmp2 = strstr(tmp1, "\"");
+	if (tmp2 == NULL) {
+		return false;
+	}
+
+	memcpy(address, tmp1, tmp2 - tmp1);
+	address[tmp2 - tmp1] = '\0';
+	return true;
+}
+
+/**
+ * @brief Get string value from AT command with length check
+ */
+int util_string_get(const struct at_param_list *list, size_t index,
+			 char *value, size_t *len)
+{
+	int ret;
+	size_t size = *len;
+
+	/* at_params_string_get calls "memcpy" instead of "strcpy" */
+	ret = at_params_string_get(list, index, value, len);
+	if (ret) {
+		return ret;
+	}
+	if (*len < size) {
+		*(value + *len) = '\0';
+		return 0;
+	}
+
+	return -ENOMEM;
 }

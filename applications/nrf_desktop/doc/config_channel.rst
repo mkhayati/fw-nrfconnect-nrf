@@ -3,6 +3,10 @@
 Configuration channel
 #####################
 
+.. contents::
+   :local:
+   :depth: 2
+
 Use the configuration channel to exchange data between your host computer and nRF Desktop's HID device.
 
 For example, among the types of data that you can send through the configuration channel are the following:
@@ -76,7 +80,7 @@ Each feature report contains the following components:
   Needed to route requests in a multi-device setup.
 
      * A recipient value that equals ``0`` means that configuration channel frame is intended for a HID device that is directly connected.
-     * Other recipient value means that the frame should be forwarded to the peripheral connected over |BLE|.
+     * Other recipient value means that the frame should be forwarded to the peripheral connected over Bluetooth LE.
 
 * Event ID - Identifier of the value that should be set or fetched; consists of a module ID and an option ID.
 * Status - Value used to exchange status of the request; also used by sender to specify the requested operation.
@@ -92,7 +96,7 @@ Each feature report contains the following components:
 Handling configuration channel in firmware
 ==========================================
 
-To enable the configuration channel in the nRF Desktop firmware, set the ``CONFIG_DESKTOP_CONFIG_CHANNEL_ENABLE`` Kconfig option.
+To enable the configuration channel in the nRF Desktop firmware, set the :option:`CONFIG_DESKTOP_CONFIG_CHANNEL_ENABLE` Kconfig option.
 This option also enables the mandatory :ref:`nrf_desktop_info`.
 
 Make sure you also configure the following configuration channel elements:
@@ -107,8 +111,8 @@ The HID configurator uses the HID feature reports to exchange the data.
 
 Depending on the connection method:
 
-* If the device is connected through USB, requests are handled by the :ref:`nrf_desktop_usb_state` in the functions :cpp:func:`get_report` and :cpp:func:`set_report`.
-* If the device is connected over Bluetooth LE, requests are handled in :ref:`nrf_desktop_hids` in :cpp:func:`feature_report_handler`.
+* If the device is connected through USB, requests are handled by the :ref:`nrf_desktop_usb_state` in the functions :c:func:`get_report` and :c:func:`set_report`.
+* If the device is connected over Bluetooth LE, requests are handled in :ref:`nrf_desktop_hids` in :c:func:`feature_report_handler`.
   The argument :c:data:`write` indicates whether the report is a GATT write (set report) or a GATT read (get report).
 
   Forwarding requests through a dongle to a connected peripheral is handled in :ref:`nrf_desktop_hid_forward`.
@@ -125,13 +129,13 @@ Depending on the connection method:
 
    The GATT write without response operation cannot be performed on HID feature report.
    To allow GATT write without response, the peripheral must provide an additional HID output report.
-   Use the ``CONFIG_DESKTOP_CONFIG_CHANNEL_OUT_REPORT`` Kconfig option in nRF Desktop peripheral configuration to add the mentioned HID output report.
+   Use the :option:`CONFIG_DESKTOP_CONFIG_CHANNEL_OUT_REPORT` Kconfig option in nRF Desktop peripheral configuration to add the mentioned HID output report.
    Disabling this option reduces the memory consumption.
 
-The ``config_event`` is used to propagate the configuration channel data.
-The configuration channel request received from host is propagated using the mentioned event with :cpp:member:`is_request` set to ``true``.
+The :c:struct:`config_event` is used to propagate the configuration channel data.
+The configuration channel request received from host is propagated using the mentioned event with :c:member:`config_event.is_request` set to ``true``.
 The application module that handles the request consumes the event and provides the response.
-The response is provided as ``config_event`` with :cpp:member:`is_request` set to ``false``.
+The response is provided as :c:struct:`config_event` with :c:member:`config_event.is_request` set to ``false``.
 In case a request is not handled by any application module, the configuration channel transport will eventually receive it and generate an error response.
 
 Listener configuration
@@ -150,7 +154,7 @@ To register an application module as a configuration channel listener, complete 
 
 1. Make sure that the application module is an :ref:`event_manager` listener.
 #. Include the :file:`config_event.h` header.
-#. Subscribe for the ``config_event`` using the :c:macro:`EVENT_SUBSCRIBE_EARLY` macro:
+#. Subscribe for the :c:struct:`config_event` using the :c:macro:`EVENT_SUBSCRIBE_EARLY` macro:
 
    .. code-block:: c
 
@@ -206,7 +210,7 @@ To register an application module as a configuration channel listener, complete 
              [TEST_MODULE_OPT_PARAM_WIFI] = "param_wifi"
          };
 
-   * Set operation handler (:cpp:func:`config_set`):
+   * Set operation handler (:c:func:`config_set`):
 
      .. code-block:: c
 
@@ -240,7 +244,7 @@ To register an application module as a configuration channel listener, complete 
              }
          }
 
-   * Fetch operation handler (:cpp:func:`config_get`):
+   * Fetch operation handler (:c:func:`config_get`):
 
      .. code-block:: c
 

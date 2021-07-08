@@ -1,12 +1,13 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <string.h>
 #include <bluetooth/mesh/gen_onoff_srv.h>
 #include <bluetooth/mesh/gen_dtt_srv.h>
+#include "gen_onoff_internal.h"
 #include "model_utils.h"
 
 static void encode_status(struct net_buf_simple *buf,
@@ -80,13 +81,19 @@ static void onoff_set(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx,
 
 	if (buf->len == 2) {
 		model_transition_buf_pull(buf, &transition);
-	} else {
+		set.transition = &transition;
+	} else if (!atomic_test_bit(&srv->flags, GEN_ONOFF_SRV_NO_DTT)) {
 		bt_mesh_dtt_srv_transition_get(srv->model, &transition);
+		set.transition = &transition;
+	} else {
+		set.transition = NULL;
 	}
 
-	set.transition = &transition;
-
 	srv->handlers->set(srv, ctx, &set, &status);
+
+	if (IS_ENABLED(CONFIG_BT_MESH_SCENE_SRV)) {
+		bt_mesh_scene_invalidate(srv->model);
+	}
 
 	(void)bt_mesh_onoff_srv_pub(srv, NULL, &status);
 
@@ -110,28 +117,71 @@ static void handle_set_unack(struct bt_mesh_model *model,
 }
 
 const struct bt_mesh_model_op _bt_mesh_onoff_srv_op[] = {
-	{ BT_MESH_ONOFF_OP_GET, BT_MESH_ONOFF_MSG_LEN_GET, handle_get },
-	{ BT_MESH_ONOFF_OP_SET, BT_MESH_ONOFF_MSG_MINLEN_SET, handle_set },
-	{ BT_MESH_ONOFF_OP_SET_UNACK, BT_MESH_ONOFF_MSG_MINLEN_SET,
-	  handle_set_unack },
+	{
+		BT_MESH_ONOFF_OP_GET,
+		BT_MESH_ONOFF_MSG_LEN_GET,
+		handle_get,
+	},
+	{
+		BT_MESH_ONOFF_OP_SET,
+		BT_MESH_ONOFF_MSG_MINLEN_SET,
+		handle_set,
+	},
+	{
+		BT_MESH_ONOFF_OP_SET_UNACK,
+		BT_MESH_ONOFF_MSG_MINLEN_SET,
+		handle_set_unack,
+	},
 	BT_MESH_MODEL_OP_END,
 };
 
-static int bt_mesh_onoff_srv_init(struct bt_mesh_model *model)
+/* .. include_startingpoint_scene_srv_rst_1 */
+static ssize_t scene_store(struct bt_mesh_model *model, uint8_t data[])
 {
 	struct bt_mesh_onoff_srv *srv = model->user_data;
+	struct bt_mesh_onoff_status status = { 0 };
 
-	srv->model = model;
-	net_buf_simple_init(model->pub->msg, 0);
+	/* Only store the next stable on_off state: */
+	srv->handlers->get(srv, NULL, &status);
+	data[0] = status.remaining_time ? status.target_on_off :
+					  status.present_on_off;
 
-	return 0;
+	return 1;
 }
 
-const struct bt_mesh_model_cb _bt_mesh_onoff_srv_cb = {
-	.init = bt_mesh_onoff_srv_init
-};
+static void scene_recall(struct bt_mesh_model *model, const uint8_t data[],
+			 size_t len, struct bt_mesh_model_transition *transition)
+{
+	struct bt_mesh_onoff_srv *srv = model->user_data;
+	struct bt_mesh_onoff_status status = { 0 };
+	struct bt_mesh_onoff_set set = {
+		.on_off = data[0],
+		.transition = transition,
+	};
 
-int _bt_mesh_onoff_srv_update_handler(struct bt_mesh_model *model)
+	srv->handlers->set(srv, NULL, &set, &status);
+}
+
+static void scene_recall_complete(struct bt_mesh_model *model)
+{
+	struct bt_mesh_onoff_srv *srv = model->user_data;
+	struct bt_mesh_onoff_status status = { 0 };
+
+	srv->handlers->get(srv, NULL, &status);
+
+	(void)bt_mesh_onoff_srv_pub(srv, NULL, &status);
+}
+
+BT_MESH_SCENE_ENTRY_SIG(onoff) = {
+	.id.sig = BT_MESH_MODEL_ID_GEN_ONOFF_SRV,
+	.maxlen = 1,
+	.store = scene_store,
+	.recall = scene_recall,
+	.recall_complete = scene_recall_complete,
+};
+/* .. include_endpoint_scene_srv_rst_1 */
+
+static int update_handler(struct bt_mesh_model *model)
 {
 	struct bt_mesh_onoff_srv *srv = model->user_data;
 	struct bt_mesh_onoff_status status = { 0 };
@@ -142,9 +192,32 @@ int _bt_mesh_onoff_srv_update_handler(struct bt_mesh_model *model)
 	return 0;
 }
 
-int32_t bt_mesh_onoff_srv_pub(struct bt_mesh_onoff_srv *srv,
-			    struct bt_mesh_msg_ctx *ctx,
-			    const struct bt_mesh_onoff_status *status)
+static int bt_mesh_onoff_srv_init(struct bt_mesh_model *model)
+{
+	struct bt_mesh_onoff_srv *srv = model->user_data;
+
+	srv->model = model;
+	srv->pub.msg = &srv->pub_buf;
+	srv->pub.update = update_handler;
+	net_buf_simple_init_with_data(&srv->pub_buf, srv->pub_data,
+				      sizeof(srv->pub_data));
+
+	return 0;
+}
+
+static void bt_mesh_onoff_srv_reset(struct bt_mesh_model *model)
+{
+	net_buf_simple_reset(model->pub->msg);
+}
+
+const struct bt_mesh_model_cb _bt_mesh_onoff_srv_cb = {
+	.init = bt_mesh_onoff_srv_init,
+	.reset = bt_mesh_onoff_srv_reset,
+};
+
+int bt_mesh_onoff_srv_pub(struct bt_mesh_onoff_srv *srv,
+			  struct bt_mesh_msg_ctx *ctx,
+			  const struct bt_mesh_onoff_status *status)
 {
 	BT_MESH_MODEL_BUF_DEFINE(msg, BT_MESH_ONOFF_OP_STATUS,
 				 BT_MESH_ONOFF_MSG_MAXLEN_STATUS);

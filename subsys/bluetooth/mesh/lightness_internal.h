@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 /**
  * @file
@@ -25,15 +25,43 @@ extern "C" {
 
 /** The lightness server's value is > 0 */
 #define LIGHTNESS_SRV_FLAG_IS_ON 0
-/** Flag for preventing startup behavior on the server */
-#define LIGHTNESS_SRV_FLAG_NO_START 1
-/** The Lightness server is being controlled by a Light Control Server */
-#define LIGHTNESS_SRV_FLAG_CONTROLLED 2
+/** Power-up sequence and scene store/recall behaviors are controlled by Light LC server. */
+#define LIGHTNESS_SRV_FLAG_EXTENDED_BY_LIGHT_CTRL 1
 
 enum light_repr {
 	ACTUAL,
 	LINEAR,
 };
+
+enum bt_mesh_lightness_op_type {
+	LIGHTNESS_OP_TYPE_GET,
+	LIGHTNESS_OP_TYPE_SET,
+	LIGHTNESS_OP_TYPE_SET_UNACK,
+	LIGHTNESS_OP_TYPE_STATUS,
+};
+
+static inline uint32_t op_get(enum bt_mesh_lightness_op_type type,
+				     enum light_repr repr)
+{
+	switch (type) {
+	case LIGHTNESS_OP_TYPE_GET:
+		return repr == ACTUAL ? BT_MESH_LIGHTNESS_OP_GET :
+					BT_MESH_LIGHTNESS_OP_LINEAR_GET;
+	case LIGHTNESS_OP_TYPE_SET:
+		return repr == ACTUAL ? BT_MESH_LIGHTNESS_OP_SET :
+					BT_MESH_LIGHTNESS_OP_LINEAR_SET;
+	case LIGHTNESS_OP_TYPE_SET_UNACK:
+		return repr == ACTUAL ? BT_MESH_LIGHTNESS_OP_SET_UNACK :
+					BT_MESH_LIGHTNESS_OP_LINEAR_SET_UNACK;
+	case LIGHTNESS_OP_TYPE_STATUS:
+		return repr == ACTUAL ? BT_MESH_LIGHTNESS_OP_STATUS :
+					BT_MESH_LIGHTNESS_OP_LINEAR_STATUS;
+	default:
+		return 0;
+	}
+
+	return 0;
+}
 
 static inline uint32_t lightness_sqrt32(uint32_t val)
 {
@@ -67,7 +95,7 @@ static inline uint16_t actual_to_linear(uint16_t actual)
 	/* Conversion:
 	 * linear = CEIL(65535 * (actual * actual) / (65535 * 65535)))
 	 */
-	return ceiling_fraction((uint32_t) actual * (uint32_t) actual, 65535UL);
+	return ceiling_fraction((uint32_t)actual * (uint32_t)actual, 65535UL);
 }
 
 /** @brief Convert light from the specified representation to the configured.
@@ -111,11 +139,35 @@ static inline uint16_t light_to_repr(uint16_t light, enum light_repr repr)
 }
 
 struct bt_mesh_lightness_srv;
+struct bt_mesh_lightness_cli;
+
+void lightness_srv_disable_control(struct bt_mesh_lightness_srv *srv);
 
 void lightness_srv_change_lvl(struct bt_mesh_lightness_srv *srv,
 			      struct bt_mesh_msg_ctx *ctx,
 			      struct bt_mesh_lightness_set *set,
-			      struct bt_mesh_lightness_status *status);
+			      struct bt_mesh_lightness_status *status,
+			      bool publish);
+
+/* For testing purposes */
+int lightness_cli_light_get(struct bt_mesh_lightness_cli *cli,
+			    struct bt_mesh_msg_ctx *ctx, enum light_repr repr,
+			    struct bt_mesh_lightness_status *rsp);
+
+int lightness_cli_light_set(struct bt_mesh_lightness_cli *cli,
+			    struct bt_mesh_msg_ctx *ctx, enum light_repr repr,
+			    const struct bt_mesh_lightness_set *set,
+			    struct bt_mesh_lightness_status *rsp);
+
+int lightness_cli_light_set_unack(struct bt_mesh_lightness_cli *cli,
+				  struct bt_mesh_msg_ctx *ctx,
+				  enum light_repr repr,
+				  const struct bt_mesh_lightness_set *set);
+
+void lightness_srv_default_set(struct bt_mesh_lightness_srv *srv,
+			       struct bt_mesh_msg_ctx *ctx, uint16_t set);
+
+int lightness_on_power_up(struct bt_mesh_lightness_srv *srv);
 
 #ifdef __cplusplus
 }

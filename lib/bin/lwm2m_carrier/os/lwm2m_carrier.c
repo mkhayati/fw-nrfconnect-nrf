@@ -1,14 +1,14 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <string.h>
 #include <zephyr.h>
 #include <lwm2m_carrier.h>
 
-#define LWM2M_CARRIER_THREAD_STACK_SIZE 8192
+#define LWM2M_CARRIER_THREAD_STACK_SIZE 4096
 #define LWLM2_CARRIER_THREAD_PRIORITY K_LOWEST_APPLICATION_THREAD_PRIO
 
 __weak int lwm2m_carrier_event_handler(const lwm2m_carrier_event_t *event)
@@ -32,6 +32,10 @@ void lwm2m_carrier_thread_run(void)
 #endif
 #ifdef CONFIG_LWM2M_CARRIER_USE_CUSTOM_BOOTSTRAP_PSK
 	config.psk = CONFIG_LWM2M_CARRIER_CUSTOM_BOOTSTRAP_PSK;
+#endif
+
+#ifdef CONFIG_LWM2M_CARRIER_USE_CUSTOM_APN
+	config.apn = CONFIG_LWM2M_CARRIER_CUSTOM_APN;
 #endif
 
 	err = lwm2m_carrier_init(&config);

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -246,7 +246,7 @@ static void rtt_send_end(struct eth_rtt_context *context)
  *  @param iface   Network interface associated with this driver.
  *  @param pkt     Frame that have to be send.
  */
-static int eth_send(struct device *dev, struct net_pkt *pkt)
+static int eth_send(const struct device *dev, struct net_pkt *pkt)
 {
 	struct eth_rtt_context *context = dev->data;
 	struct net_buf *frag;
@@ -408,7 +408,7 @@ static void decode_new_slip_data(struct eth_rtt_context *context,
 }
 
 /** Delayed work used to do polling RTT down channel */
-static struct k_delayed_work eth_rtt_poll_work;
+static struct k_work_delayable eth_rtt_poll_work;
 
 /** Work handler that is submitted to system workqueue by the poll timer.
  *  It is responsible for reading all available data from RTT down buffer.
@@ -446,7 +446,7 @@ static void poll_work_handler(struct k_work *work)
 		period = K_MSEC(CONFIG_ETH_POLL_ACTIVE_PERIOD_MS);
 	}
 
-	k_delayed_work_submit(&eth_rtt_poll_work, period);
+	k_work_schedule(&eth_rtt_poll_work, period);
 }
 
 /******** COMMON PART OF THE DRIVER (initialization on configuration) ********/
@@ -491,9 +491,8 @@ static void eth_iface_init(struct net_if *iface)
 			     sizeof(context->mac_addr),
 			     NET_LINK_ETHERNET);
 
-	k_delayed_work_init(&eth_rtt_poll_work, poll_work_handler);
-	k_delayed_work_submit(&eth_rtt_poll_work,
-			      K_MSEC(CONFIG_ETH_POLL_PERIOD_MS));
+	k_work_init_delayable(&eth_rtt_poll_work, poll_work_handler);
+	k_work_schedule(&eth_rtt_poll_work, K_MSEC(CONFIG_ETH_POLL_PERIOD_MS));
 
 	LOG_INF("Initialized '%s': "
 		"MAC addr %02X:%02X:%02X:%02X:%02X:%02X, "
@@ -512,7 +511,7 @@ static void eth_iface_init(struct net_if *iface)
 /** Returns network driver capabilities. Currently no additional capabilities
  *  available.
  */
-static enum ethernet_hw_caps eth_capabilities(struct device *dev)
+static enum ethernet_hw_caps eth_capabilities(const struct device *dev)
 {
 	return (enum ethernet_hw_caps)0;
 }
@@ -520,7 +519,7 @@ static enum ethernet_hw_caps eth_capabilities(struct device *dev)
 /** Network driver initialization. It setups RTT channels.
  *  @param dev   Device to initialize.
  */
-static int eth_rtt_init(struct device *dev)
+static int eth_rtt_init(const struct device *dev)
 {
 	struct eth_rtt_context *context = dev->data;
 
@@ -545,6 +544,6 @@ static const struct ethernet_api if_api = {
 
 /** Initialization of network device driver. */
 ETH_NET_DEVICE_INIT(eth_rtt, CONFIG_ETH_RTT_DRV_NAME, eth_rtt_init,
-		    device_pm_control_nop, &context_data, NULL,
+		    NULL, &context_data, NULL,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &if_api,
 		    CONFIG_ETH_RTT_MTU);

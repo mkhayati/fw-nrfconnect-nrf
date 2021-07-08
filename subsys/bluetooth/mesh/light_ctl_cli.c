@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <bluetooth/mesh/light_ctl_cli.h>
@@ -18,13 +18,23 @@ static void ctl_status_handle(struct bt_mesh_model *model,
 
 	struct bt_mesh_light_ctl_cli *cli = model->user_data;
 	struct bt_mesh_light_ctl_status status;
+	struct bt_mesh_light_ctl_status *rsp;
 
 	status.current_light = net_buf_simple_pull_le16(buf);
 	status.current_temp = net_buf_simple_pull_le16(buf);
+	if ((status.current_temp < BT_MESH_LIGHT_TEMP_MIN) ||
+	    (status.current_temp > BT_MESH_LIGHT_TEMP_MAX)) {
+		return;
+	}
 
 	if (buf->len == 5) {
 		status.target_light = net_buf_simple_pull_le16(buf);
 		status.target_temp = net_buf_simple_pull_le16(buf);
+		if ((status.target_temp < BT_MESH_LIGHT_TEMP_MIN) ||
+		    (status.target_temp > BT_MESH_LIGHT_TEMP_MAX)) {
+			return;
+		}
+
 		status.remaining_time =
 			model_transition_decode(net_buf_simple_pull_u8(buf));
 	} else {
@@ -33,15 +43,13 @@ static void ctl_status_handle(struct bt_mesh_model *model,
 		status.remaining_time = 0;
 	}
 
-	if (model_ack_match(&cli->ack_ctx, BT_MESH_LIGHT_CTL_STATUS, ctx)) {
-		struct bt_mesh_light_ctl_status *rsp =
-			(struct bt_mesh_light_ctl_status *)
-				cli->ack_ctx.user_data;
+	if (bt_mesh_msg_ack_ctx_match(&cli->ack_ctx, BT_MESH_LIGHT_CTL_STATUS, ctx->addr,
+				      (void **)&rsp)) {
 		*rsp = status;
-		model_ack_rx(&cli->ack_ctx);
+		bt_mesh_msg_ack_ctx_rx(&cli->ack_ctx);
 	}
 
-	if (cli->handlers->ctl_status) {
+	if (cli->handlers && cli->handlers->ctl_status) {
 		cli->handlers->ctl_status(cli, ctx, &status);
 	}
 }
@@ -56,21 +64,19 @@ static void temp_range_status_handle(struct bt_mesh_model *model,
 
 	struct bt_mesh_light_ctl_cli *cli = model->user_data;
 	struct bt_mesh_light_temp_range_status status;
+	struct bt_mesh_light_temp_range_status *rsp;
 
-	status.status_code = net_buf_simple_pull_u8(buf);
+	status.status = net_buf_simple_pull_u8(buf);
 	status.range.min = net_buf_simple_pull_le16(buf);
 	status.range.max = net_buf_simple_pull_le16(buf);
 
-	if (model_ack_match(&cli->ack_ctx, BT_MESH_LIGHT_TEMP_RANGE_STATUS,
-			    ctx)) {
-		struct bt_mesh_light_temp_range_status *rsp =
-			(struct bt_mesh_light_temp_range_status *)
-				cli->ack_ctx.user_data;
+	if (bt_mesh_msg_ack_ctx_match(&cli->ack_ctx, BT_MESH_LIGHT_TEMP_RANGE_STATUS, ctx->addr,
+				      (void **)&rsp)) {
 		*rsp = status;
-		model_ack_rx(&cli->ack_ctx);
+		bt_mesh_msg_ack_ctx_rx(&cli->ack_ctx);
 	}
 
-	if (cli->handlers->temp_range_status) {
+	if (cli->handlers && cli->handlers->temp_range_status) {
 		cli->handlers->temp_range_status(cli, ctx, &status);
 	}
 }
@@ -86,12 +92,23 @@ static void temp_status_handle(struct bt_mesh_model *model,
 
 	struct bt_mesh_light_ctl_cli *cli = model->user_data;
 	struct bt_mesh_light_temp_status status;
+	struct bt_mesh_light_temp_status *rsp;
 
 	status.current.temp = net_buf_simple_pull_le16(buf);
+	if ((status.current.temp < BT_MESH_LIGHT_TEMP_MIN) ||
+	    (status.current.temp > BT_MESH_LIGHT_TEMP_MAX)) {
+		return;
+	}
+
 	status.current.delta_uv = net_buf_simple_pull_le16(buf);
 
 	if (buf->len == 5) {
 		status.target.temp = net_buf_simple_pull_le16(buf);
+		if ((status.target.temp < BT_MESH_LIGHT_TEMP_MIN) ||
+		    (status.target.temp > BT_MESH_LIGHT_TEMP_MAX)) {
+			return;
+		}
+
 		status.target.delta_uv = net_buf_simple_pull_le16(buf);
 		status.remaining_time =
 			model_transition_decode(net_buf_simple_pull_u8(buf));
@@ -101,16 +118,13 @@ static void temp_status_handle(struct bt_mesh_model *model,
 		status.remaining_time = 0;
 	}
 
-	if (model_ack_match(&cli->ack_ctx, BT_MESH_LIGHT_TEMP_STATUS,
-			    ctx)) {
-		struct bt_mesh_light_temp_status *rsp =
-			(struct bt_mesh_light_temp_status *)
-				cli->ack_ctx.user_data;
+	if (bt_mesh_msg_ack_ctx_match(&cli->ack_ctx, BT_MESH_LIGHT_TEMP_STATUS,
+			    ctx->addr, (void **)&rsp)) {
 		*rsp = status;
-		model_ack_rx(&cli->ack_ctx);
+		bt_mesh_msg_ack_ctx_rx(&cli->ack_ctx);
 	}
 
-	if (cli->handlers->temp_status) {
+	if (cli->handlers && cli->handlers->temp_status) {
 		cli->handlers->temp_status(cli, ctx, &status);
 	}
 }
@@ -125,35 +139,49 @@ static void default_status_handle(struct bt_mesh_model *model,
 
 	struct bt_mesh_light_ctl_cli *cli = model->user_data;
 	struct bt_mesh_light_ctl status;
+	struct bt_mesh_light_ctl *rsp;
 
 	status.light = net_buf_simple_pull_le16(buf);
 	status.temp = net_buf_simple_pull_le16(buf);
-	status.delta_uv = net_buf_simple_pull_le16(buf);
-
-	if (model_ack_match(&cli->ack_ctx, BT_MESH_LIGHT_CTL_DEFAULT_STATUS,
-			    ctx)) {
-		struct bt_mesh_light_ctl *rsp =
-			(struct bt_mesh_light_ctl *)
-				cli->ack_ctx.user_data;
-		*rsp = status;
-		model_ack_rx(&cli->ack_ctx);
+	if ((status.temp < BT_MESH_LIGHT_TEMP_MIN) ||
+	    (status.temp > BT_MESH_LIGHT_TEMP_MAX)) {
+		return;
 	}
 
-	if (cli->handlers->default_status) {
+	status.delta_uv = net_buf_simple_pull_le16(buf);
+
+	if (bt_mesh_msg_ack_ctx_match(&cli->ack_ctx, BT_MESH_LIGHT_CTL_DEFAULT_STATUS, ctx->addr,
+				      (void **)&rsp)) {
+		*rsp = status;
+		bt_mesh_msg_ack_ctx_rx(&cli->ack_ctx);
+	}
+
+	if (cli->handlers && cli->handlers->default_status) {
 		cli->handlers->default_status(cli, ctx, &status);
 	}
 }
 
 const struct bt_mesh_model_op _bt_mesh_light_ctl_cli_op[] = {
-	{ BT_MESH_LIGHT_CTL_STATUS, BT_MESH_LIGHT_CTL_MSG_MINLEN_STATUS,
-	  ctl_status_handle },
-	{ BT_MESH_LIGHT_TEMP_RANGE_STATUS,
-	  BT_MESH_LIGHT_CTL_MSG_LEN_TEMP_RANGE_STATUS,
-	  temp_range_status_handle },
-	{ BT_MESH_LIGHT_TEMP_STATUS,
-	  BT_MESH_LIGHT_CTL_MSG_MINLEN_TEMP_STATUS, temp_status_handle },
-	{ BT_MESH_LIGHT_CTL_DEFAULT_STATUS,
-	  BT_MESH_LIGHT_CTL_MSG_LEN_DEFAULT_MSG, default_status_handle },
+	{
+		BT_MESH_LIGHT_CTL_STATUS,
+		BT_MESH_LIGHT_CTL_MSG_MINLEN_STATUS,
+		ctl_status_handle,
+	},
+	{
+		BT_MESH_LIGHT_TEMP_RANGE_STATUS,
+		BT_MESH_LIGHT_CTL_MSG_LEN_TEMP_RANGE_STATUS,
+		temp_range_status_handle,
+	},
+	{
+		BT_MESH_LIGHT_TEMP_STATUS,
+		BT_MESH_LIGHT_CTL_MSG_MINLEN_TEMP_STATUS,
+		temp_status_handle,
+	},
+	{
+		BT_MESH_LIGHT_CTL_DEFAULT_STATUS,
+		BT_MESH_LIGHT_CTL_MSG_LEN_DEFAULT_MSG,
+		default_status_handle,
+	},
 	BT_MESH_MODEL_OP_END,
 };
 
@@ -162,14 +190,25 @@ static int bt_mesh_light_ctl_cli_init(struct bt_mesh_model *model)
 	struct bt_mesh_light_ctl_cli *cli = model->user_data;
 
 	cli->model = model;
-	net_buf_simple_init(cli->pub.msg, 0);
-	model_ack_init(&cli->ack_ctx);
+	cli->pub.msg = &cli->pub_buf;
+	net_buf_simple_init_with_data(&cli->pub_buf, cli->pub_data,
+				      sizeof(cli->pub_data));
+	bt_mesh_msg_ack_ctx_init(&cli->ack_ctx);
 
 	return 0;
 }
 
+static void bt_mesh_light_ctl_cli_reset(struct bt_mesh_model *model)
+{
+	struct bt_mesh_light_ctl_cli *cli = model->user_data;
+
+	net_buf_simple_reset(cli->pub.msg);
+	bt_mesh_msg_ack_ctx_reset(&cli->ack_ctx);
+}
+
 const struct bt_mesh_model_cb _bt_mesh_light_ctl_cli_cb = {
 	.init = bt_mesh_light_ctl_cli_init,
+	.reset = bt_mesh_light_ctl_cli_reset,
 };
 
 static int get_msg(struct bt_mesh_light_ctl_cli *cli,
@@ -231,17 +270,17 @@ int bt_mesh_light_ctl_set_unack(struct bt_mesh_light_ctl_cli *cli,
 }
 
 int bt_mesh_light_temp_get(struct bt_mesh_light_ctl_cli *cli,
-			       struct bt_mesh_msg_ctx *ctx,
-			       struct bt_mesh_light_temp_status *rsp)
+			   struct bt_mesh_msg_ctx *ctx,
+			   struct bt_mesh_light_temp_status *rsp)
 {
 	return get_msg(cli, ctx, rsp, BT_MESH_LIGHT_TEMP_GET,
 		       BT_MESH_LIGHT_TEMP_STATUS);
 }
 
 int bt_mesh_light_temp_set(struct bt_mesh_light_ctl_cli *cli,
-			       struct bt_mesh_msg_ctx *ctx,
-			       const struct bt_mesh_light_temp_set *set,
-			       struct bt_mesh_light_temp_status *rsp)
+			   struct bt_mesh_msg_ctx *ctx,
+			   const struct bt_mesh_light_temp_set *set,
+			   struct bt_mesh_light_temp_status *rsp)
 {
 	BT_MESH_MODEL_BUF_DEFINE(msg, BT_MESH_LIGHT_TEMP_SET,
 				 BT_MESH_LIGHT_CTL_MSG_MAXLEN_TEMP_SET);

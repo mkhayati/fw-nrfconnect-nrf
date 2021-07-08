@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -13,8 +13,8 @@
 #include <net/nrf_cloud.h>
 #include <dk_buttons_and_leds.h>
 #include <modem/lte_lc.h>
-#include <power/reboot.h>
-#include <modem/bsdlib.h>
+#include <sys/reboot.h>
+#include <modem/nrf_modem_lib.h>
 
 #include "aggregator.h"
 #include "ble.h"
@@ -68,13 +68,14 @@ static struct nrf_cloud_sensor_data gps_cloud_data = {
 static atomic_val_t send_data_enable;
 
 /* Structures for work */
-static struct k_delayed_work leds_update_work;
-static struct k_delayed_work retry_connect_work;
-static struct k_work connect_work;
+static struct k_work_delayable leds_update_work;
+static struct k_work_delayable connect_work;
+
+static bool cloud_connected;
 
 enum error_type {
 	ERROR_NRF_CLOUD,
-	ERROR_BSD_RECOVERABLE,
+	ERROR_MODEM_RECOVERABLE,
 };
 
 /* Forward declaration of functions */
@@ -94,7 +95,7 @@ void error_handler(enum error_type err_type, int err)
 		k_sched_lock();
 		err = lte_lc_power_off();
 		__ASSERT(err == 0, "lte_lc_power_off failed: %d", err);
-		bsdlib_shutdown();
+		nrf_modem_lib_shutdown();
 	}
 
 #if !defined(CONFIG_DEBUG)
@@ -110,12 +111,12 @@ void error_handler(enum error_type err_type, int err)
 		led_pattern = DK_LED1_MSK | DK_LED4_MSK;
 		printk("Error of type ERROR_NRF_CLOUD: %d\n", err);
 		break;
-	case ERROR_BSD_RECOVERABLE:
+	case ERROR_MODEM_RECOVERABLE:
 		/* Blinking all LEDs ON/OFF in pairs (1 and 3, 2 and 4)
 		 * if there is a recoverable error.
 		 */
 		led_pattern = DK_LED1_MSK | DK_LED3_MSK;
-		printk("Error of type ERROR_BSD_RECOVERABLE: %d\n", err);
+		printk("Error of type ERROR_MODEM_RECOVERABLE: %d\n", err);
 		break;
 	default:
 		/* Blinking all LEDs ON/OFF in pairs (1 and 2, 3 and 4)
@@ -139,14 +140,14 @@ void nrf_cloud_error_handler(int err)
 	error_handler(ERROR_NRF_CLOUD, err);
 }
 
-/**@brief Recoverable BSD library error. */
-void bsd_recoverable_error_handler(uint32_t err)
+/**@brief Recoverable modem library error. */
+void nrf_modem_recoverable_error_handler(uint32_t err)
 {
-	error_handler(ERROR_BSD_RECOVERABLE, (int)err);
+	error_handler(ERROR_MODEM_RECOVERABLE, (int)err);
 }
 
 /**@brief Callback for GPS events */
-static void gps_handler(struct device *dev, struct gps_event *evt)
+static void gps_handler(const struct device *dev, struct gps_event *evt)
 {
 	uint32_t button_state, has_changed;
 	struct sensor_data in_data = {
@@ -226,7 +227,7 @@ static void leds_update(struct k_work *work)
 		current_led_on_mask = led_on_mask;
 	}
 
-	k_delayed_work_submit(&leds_update_work, LEDS_UPDATE_INTERVAL);
+	k_work_schedule(&leds_update_work, LEDS_UPDATE_INTERVAL);
 }
 
 /**@brief Send sensor data to nRF Cloud. **/
@@ -292,7 +293,13 @@ static void cloud_event_handler(const struct nrf_cloud_evt *evt)
 	switch (evt->type) {
 	case NRF_CLOUD_EVT_TRANSPORT_CONNECTED:
 		printk("NRF_CLOUD_EVT_TRANSPORT_CONNECTED\n");
-		k_delayed_work_cancel(&retry_connect_work);
+		cloud_connected = true;
+		/* This may fail if the work item is already being processed,
+		 * but in such case, the next time the work handler is executed,
+		 * it will exit after checking the above flag and the work will
+		 * not be scheduled again.
+		 */
+		(void)k_work_cancel_delayable(&connect_work);
 		break;
 	case NRF_CLOUD_EVT_USER_ASSOCIATION_REQUEST:
 		printk("NRF_CLOUD_EVT_USER_ASSOCIATION_REQUEST\n");
@@ -339,8 +346,9 @@ static void cloud_event_handler(const struct nrf_cloud_evt *evt)
 		atomic_set(&send_data_enable, 0);
 		display_state = LEDS_INITIALIZING;
 
+		cloud_connected = false;
 		/* Reconnect to nRF Cloud. */
-		k_work_submit(&connect_work);
+		k_work_schedule(&connect_work, K_NO_WAIT);
 		break;
 	case NRF_CLOUD_EVT_ERROR:
 		printk("NRF_CLOUD_EVT_ERROR, status: %d\n", evt->status);
@@ -373,6 +381,10 @@ static void cloud_connect(struct k_work *work)
 
 	ARG_UNUSED(work);
 
+	if (cloud_connected) {
+		return;
+	}
+
 	const enum nrf_cloud_sensor supported_sensors[] = {
 		NRF_CLOUD_SENSOR_GPS, NRF_CLOUD_SENSOR_FLIP
 	};
@@ -393,7 +405,7 @@ static void cloud_connect(struct k_work *work)
 	}
 
 	display_state = LEDS_CLOUD_CONNECTING;
-	k_delayed_work_submit(&retry_connect_work, RETRY_CONNECT_WAIT);
+	k_work_schedule(&connect_work, RETRY_CONNECT_WAIT);
 }
 
 /**@brief Callback for button events from the DK buttons and LEDs library. */
@@ -408,10 +420,9 @@ static void button_handler(uint32_t buttons, uint32_t has_changed)
 /**@brief Initializes and submits delayed work. */
 static void work_init(void)
 {
-	k_delayed_work_init(&leds_update_work, leds_update);
-	k_delayed_work_init(&retry_connect_work, cloud_connect);
-	k_work_init(&connect_work, cloud_connect);
-	k_delayed_work_submit(&leds_update_work, LEDS_UPDATE_INTERVAL);
+	k_work_init_delayable(&leds_update_work, leds_update);
+	k_work_init_delayable(&connect_work, cloud_connect);
+	k_work_schedule(&leds_update_work, LEDS_UPDATE_INTERVAL);
 }
 
 /**@brief Configures modem to provide LTE link. Blocks until link is
@@ -437,7 +448,7 @@ static void modem_configure(void)
 static void sensors_init(void)
 {
 	int err;
-	struct device *gps_dev = device_get_binding(CONFIG_GPS_DEV_NAME);
+	const struct device *gps_dev = device_get_binding(CONFIG_GPS_DEV_NAME);
 	struct gps_config gps_cfg = {
 		.nav_mode = GPS_NAV_MODE_PERIODIC,
 		.interval = CONFIG_GPS_SEARCH_INTERVAL,
@@ -506,6 +517,5 @@ void main(void)
 		nrf_cloud_process();
 		send_aggregated_data();
 		k_sleep(K_MSEC(10));
-		k_cpu_idle();
 	}
 }

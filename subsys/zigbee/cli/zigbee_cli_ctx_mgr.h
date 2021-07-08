@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef ZIGBEE_CLI_CTX_MGR_H__
@@ -10,6 +10,7 @@
 #include <shell/shell.h>
 
 #include "zigbee_cli_zdo_types.h"
+#include "zigbee_cli_ping_types.h"
 
 #define CTX_MGR_ENTRY_IVALID_INDEX 0xFF
 
@@ -19,7 +20,8 @@ enum ctx_entry_type {
 	CTX_MGR_INVALID_ENTRY_TYPE,
 	CTX_MGR_ZDO_ENTRY_TYPE,
 	CTX_MGR_ZCL_ENTRY_TYPE,
-	CTX_MGR_PING_ENTRY_TYPE,
+	CTX_MGR_PING_REQ_ENTRY_TYPE,
+	CTX_MGR_PING_REPLY_ENTRY_TYPE
 };
 
 /* A context manager entry structure associated with a given frame,
@@ -44,6 +46,8 @@ struct ctx_entry {
 	 */
 	union {
 		struct zdo_data zdo_data;
+		struct ping_req_data ping_req_data;
+		struct ping_reply_data ping_reply_data;
 	};
 };
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -23,7 +23,12 @@ extern test_vector_hash_t __stop_test_vector_hash_512_data[];
 extern test_vector_hash_t __start_test_vector_hash_512_long_data[];
 extern test_vector_hash_t __stop_test_vector_hash_512_long_data[];
 
+#if defined(CONFIG_CRYPTO_TEST_LARGE_VECTORS)
 #define INPUT_BUF_SIZE (4125)
+#else
+#define INPUT_BUF_SIZE (512)
+#endif // CRYPTO_TEST_LARGE_VECTORS
+
 #define OUTPUT_BUF_SIZE (64)
 
 static mbedtls_sha512_context sha512_context;
@@ -81,12 +86,12 @@ void sha_512_clear_buffers(void)
 __attribute__((noinline)) void unhexify_sha_512(void)
 {
 	/* Fetch and unhexify test vectors. */
-	in_len = hex2bin(p_test_vector->p_input, strlen(p_test_vector->p_input),
-			 m_sha_input_buf, strlen(p_test_vector->p_input));
-	expected_out_len = hex2bin(p_test_vector->p_expected_output,
-				   strlen(p_test_vector->p_expected_output),
-				   m_sha_expected_output_buf,
-				   strlen(p_test_vector->p_expected_output));
+	in_len = hex2bin_safe(p_test_vector->p_input,
+			      m_sha_input_buf,
+			      sizeof(m_sha_input_buf));
+	expected_out_len = hex2bin_safe(p_test_vector->p_expected_output,
+					m_sha_expected_output_buf,
+					sizeof(m_sha_expected_output_buf));
 	out_len = expected_out_len;
 }
 
@@ -94,10 +99,9 @@ __attribute__((noinline)) void unhexify_sha_512_long(void)
 {
 	/* Fetch and unhexify test vectors. */
 	in_len = p_test_vector->chunk_length;
-	expected_out_len = hex2bin(p_test_vector->p_expected_output,
-				   strlen(p_test_vector->p_expected_output),
-				   m_sha_expected_output_buf,
-				   strlen(p_test_vector->p_expected_output));
+	expected_out_len = hex2bin_safe(p_test_vector->p_expected_output,
+					m_sha_expected_output_buf,
+					sizeof(m_sha_expected_output_buf));
 	out_len = expected_out_len;
 	memcpy(m_sha_input_buf, p_test_vector->p_input, in_len);
 }

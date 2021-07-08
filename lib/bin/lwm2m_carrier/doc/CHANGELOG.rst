@@ -3,7 +3,120 @@
 Changelog
 #########
 
+.. contents::
+   :local:
+   :depth: 2
+
 All notable changes to this project are documented in this file.
+
+liblwm2m_carrier 0.20.1
+***********************
+
+Release for modem firmware version 1.3.0.
+
+Certification status
+====================
+
+For certification status, see `Mobile network operator certifications`_.
+
+Changes
+=======
+
+* Fixed a race condition that could render the LwM2M carrier library unresponsive.
+
+liblwm2m_carrier 0.20.0
+***********************
+
+Release for modem firmware version 1.3.0.
+
+Certification status
+====================
+
+For certification status, see `Mobile network operator certifications`_.
+
+Changes
+=======
+
+* CA certificates are no longer provided by the LwM2M carrier library.
+
+  * Application is now expected to store CA certificates into the modem security tags.
+  * Added a new event :c:macro:`LWM2M_CARRIER_EVENT_CERTS_INIT` that instructs the application to provide the CA certificate security tags to the LwM2M carrier library.
+* Renamed the event :c:macro:`LWM2M_CARRIER_BSDLIB_INIT` to :c:macro:`LWM2M_CARRIER_EVENT_MODEM_INIT`.
+* Added a new error code :c:macro:`LWM2M_CARRIER_ERROR_SERVICE_UNAVAILABLE` which indicates that the LwM2M server is unavailable due to maintenance.
+* Added a new error code :c:macro:`LWM2M_CARRIER_ERROR_CONFIGURATION` which indicates that an illegal object configuration was detected.
+* Added new Kconfig options :c:option:`CONFIG_LWM2M_CARRIER_USE_CUSTOM_APN` and :c:option:`CONFIG_LWM2M_CARRIER_CUSTOM_APN` to set the ``apn`` member of :c:type:`lwm2m_carrier_config_t`.
+* It is now possible to configure a custom bootstrap URI using :c:option:`CONFIG_LWM2M_CARRIER_USE_CUSTOM_BOOTSTRAP_URI` regardless of operator SIM.
+
+liblwm2m_carrier 0.10.2
+***********************
+
+Release for modem firmware versions 1.2.3 and 1.1.4, and |NCS| 1.4.2.
+
+Certification status
+====================
+
+For certification status, see `Mobile network operator certifications`_.
+
+Size
+====
+
+See :ref:`lwm2m_lib_size` for an explanation of the library size in different scenarios.
+
++-------------------------+---------------+------------+
+|                         | Flash (Bytes) | RAM (Bytes)|
++-------------------------+---------------+------------+
+| Library size            | 61728         | 10226      |
+| (binary)                |               |            |
++-------------------------+---------------+------------+
+| Library size            | 97116         | 29552      |
+| (reference application) |               |            |
++-------------------------+---------------+------------+
+
+Changes
+=======
+
+* :c:macro:`LWM2M_CARRIER_EVENT_LTE_READY` will be sent to the application even when the device is outside of AT&T and Verizon networks.
+* The interval to check for sufficient battery charge during FOTA has been reduced from five minutes to one minute.
+
+liblwm2m_carrier 0.10.1
+***********************
+
+Release for modem firmware versions 1.2.2 and 1.1.4, and |NCS| 1.4.1.
+
+Certification status
+====================
+
+For certification status, see `Mobile network operator certifications`_.
+
+Changes
+=======
+
+* Minor fixes and improvements.
+
+liblwm2m_carrier 0.10.0
+***********************
+
+Snapshot release for modem firmware version 1.2.2 and the upcoming version 1.1.4, and |NCS| 1.4.0.
+
+This release is intended to let users begin integration towards the AT&T and Verizon device management platforms.
+Modem firmware version 1.1.4 must be used for Verizon, and the modem firmware version 1.2.2 must be used for AT&T.
+
+The snapshot can be used for development and testing only.
+It is not ready for certification.
+
+Certification status
+====================
+
+The library is not certified with any carrier.
+
+Changes
+=======
+
+* Reduced the required amount of stack and heap allocated by the library.
+* Reduced the power consumption of the library.
+* Renamed the event :c:macro:`LWM2M_CARRIER_EVENT_READY` to :c:macro:`LWM2M_CARRIER_EVENT_REGISTERED`.
+* Introduced a new event :c:macro:`LWM2M_CARRIER_EVENT_LTE_READY`, to indicate that the LTE link can be used by the application.
+* The Modem DFU socket can now be used by the application when it is not needed by the library.
 
 liblwm2m_carrier 0.9.1
 **********************
@@ -142,7 +255,7 @@ Changes
 =======
 
 * Numerous stability fixes and improvements.
-* Updated bsdlib version dependency.
+* Updated Modem library version dependency.
 * Fixed an issue where high LTE network activity could prevent modem firmware updates over LwM2M.
 
 * Added the following library events:

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <debug/cpu_load.h>
 #include <shell/shell.h>
@@ -34,7 +34,7 @@ LOG_MODULE_REGISTER(cpu_load, CONFIG_CPU_LOAD_LOG_LEVEL);
 
 static nrfx_timer_t timer = NRFX_TIMER_INSTANCE(CONFIG_CPU_LOAD_TIMER_INSTANCE);
 static bool ready;
-static struct k_delayed_work cpu_load_log;
+static struct k_work_delayable cpu_load_log;
 static uint32_t cycle_ref;
 static uint32_t shared_ch_mask;
 
@@ -111,13 +111,13 @@ static void cpu_load_log_fn(struct k_work *item)
 
 	cpu_load_reset();
 	LOG_INF("Load:%d,%03d%%", percent, fraction);
-	k_delayed_work_submit(&cpu_load_log, K_MSEC(CPU_LOAD_LOG_INTERVAL));
+	k_work_schedule(&cpu_load_log, K_MSEC(CPU_LOAD_LOG_INTERVAL));
 }
 
 static int cpu_load_log_init(void)
 {
-	k_delayed_work_init(&cpu_load_log, cpu_load_log_fn);
-	return k_delayed_work_submit(&cpu_load_log, K_MSEC(CPU_LOAD_LOG_INTERVAL));
+	k_work_init_delayable(&cpu_load_log, cpu_load_log_fn);
+	return k_work_schedule(&cpu_load_log, K_MSEC(CPU_LOAD_LOG_INTERVAL));
 }
 
 static void timer_handler(nrf_timer_event_t event_type, void *context)

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -34,7 +34,7 @@ LOG_MODULE_REGISTER(bsec, CONFIG_ASSET_TRACKER_LOG_LEVEL);
  */
 #define BSEC_STATE_SAVE_INTERVAL	600
 
-struct device *i2c_master;
+const struct device *i2c_master;
 
 struct env_sensor {
 	env_sensor_data_t sensor;
@@ -80,7 +80,7 @@ static struct k_thread thread;
 static uint8_t s_state_buffer[BSEC_MAX_STATE_BLOB_SIZE];
 static int32_t s_state_buffer_len;
 
-static struct k_delayed_work env_sensors_poller;
+static struct k_work_delayable env_sensors_poller;
 static env_sensors_data_ready_cb data_ready_cb;
 static uint32_t data_send_interval_s = CONFIG_ENVIRONMENT_DATA_SEND_INTERVAL;
 static bool backoff_enabled;
@@ -203,11 +203,17 @@ static uint32_t state_load(uint8_t *state_buffer, uint32_t n_buffer)
 
 static void state_save(const uint8_t *state_buffer, uint32_t length)
 {
+	LOG_INF("Storing state to flash");
 	if (length > sizeof(s_state_buffer)) {
 		LOG_ERR("State buffer too big to save: %d", length);
 		return;
 	}
-	settings_save_one(SETTINGS_BSEC_STATE, state_buffer, length);
+
+	int err = settings_save_one(SETTINGS_BSEC_STATE, state_buffer, length);
+
+	if (err) {
+		LOG_ERR("Storing state to flash failed");
+	}
 }
 
 static uint32_t config_load(uint8_t *config_buffer, uint32_t n_buffer)
@@ -218,7 +224,7 @@ static uint32_t config_load(uint8_t *config_buffer, uint32_t n_buffer)
 
 static void bsec_thread(void)
 {
-	bsec_iot_loop((void *)k_sleep, get_timestamp_us, output_ready,
+	bsec_iot_loop(delay_ms, get_timestamp_us, output_ready,
 			state_save, BSEC_STATE_SAVE_INTERVAL);
 }
 
@@ -288,7 +294,7 @@ int env_sensors_get_co2_equivalent(env_sensor_data_t *sensor_data)
 
 static inline int submit_poll_work(const uint32_t delay_s)
 {
-	return k_delayed_work_submit_to_queue(env_sensors_work_q,
+	return k_work_reschedule_for_queue(env_sensors_work_q,
 					      &env_sensors_poller,
 					      K_SECONDS((uint32_t)delay_s));
 }
@@ -377,6 +383,10 @@ int env_sensors_init_and_start(struct k_work_q *work_q,
 	} else if (bsec_ret.bsec_status) {
 		LOG_ERR("Could not initialize BSEC library: %d",
 			(int)bsec_ret.bsec_status);
+		if ((int)bsec_ret.bsec_status == -34) {
+			LOG_ERR("Deleting state from flash");
+			settings_delete(SETTINGS_BSEC_STATE);
+		}
 		return (int)bsec_ret.bsec_status;
 	}
 	update_subscription(BSEC_SAMPLE_RATE);
@@ -389,7 +399,7 @@ int env_sensors_init_and_start(struct k_work_q *work_q,
 
 	env_sensors_work_q = work_q;
 
-	k_delayed_work_init(&env_sensors_poller, env_sensors_poll_fn);
+	k_work_init_delayable(&env_sensors_poller, env_sensors_poll_fn);
 
 	initialized = true;
 
@@ -412,8 +422,9 @@ void env_sensors_set_send_interval(const uint32_t interval_s)
 	if (data_send_interval_s) {
 		/* restart work for new interval to take effect */
 		env_sensors_poll();
-	} else if (k_delayed_work_remaining_get(&env_sensors_poller) > 0) {
-		k_delayed_work_cancel(&env_sensors_poller);
+	} else {
+		/* If cancel fails poller will return early when checking data_send_interval_s */
+		k_work_cancel_delayable(&env_sensors_poller);
 	}
 }
 

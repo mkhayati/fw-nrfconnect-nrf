@@ -1,8 +1,9 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
+
 #include <zephyr.h>
 #include <bluetooth/gatt.h>
 #include <bluetooth/hci.h>
@@ -11,6 +12,17 @@
 #include <settings/settings.h>
 
 #include "ble_utils.h"
+
+/* MCUMgr BT FOTA includes */
+#ifdef CONFIG_MCUMGR_CMD_OS_MGMT
+#include "os_mgmt/os_mgmt.h"
+#endif
+#ifdef CONFIG_MCUMGR_CMD_IMG_MGMT
+#include "img_mgmt/img_mgmt.h"
+#endif
+#ifdef CONFIG_MCUMGR_SMP_BT
+#include <mgmt/mcumgr/smp_bt.h>
+#endif
 
 LOG_MODULE_REGISTER(ble_utils, CONFIG_BLE_UTILS_LOG_LEVEL);
 
@@ -48,7 +60,7 @@ static const struct bt_data ad[] = {
 };
 
 static const struct bt_data sd[] = {
-	BT_DATA_BYTES(BT_DATA_UUID128_ALL, NUS_UUID_SERVICE),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_VAL),
 };
 
 static struct k_work on_connect_work;
@@ -142,23 +154,23 @@ static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 	LOG_INF("Pairing failed conn: %s, reason %d", log_strdup(addr), reason);
 }
 
-static struct bt_gatt_nus_cb *set_nus_clbs(nus_received_cb_t on_nus_received,
-					   nus_sent_cb_t on_nus_send)
+#if defined(CONFIG_MCUMGR_SMP_BT)
+static int software_update_confirmation_handler(uint32_t offset, uint32_t size,
+						void *arg)
 {
-	static struct bt_gatt_nus_cb nus_cb;
+	/* For now just print update progress and confirm data chunk without any additional
+	 * checks.
+	 */
+	LOG_INF("Device firmware upgrade progress %d B / %d B", offset, size);
 
-	nus_cb.received_cb = on_nus_received;
-	nus_cb.sent_cb = on_nus_send;
-
-	return &nus_cb;
+	return 0;
 }
+#endif
 
-int ble_utils_init(nus_received_cb_t on_nus_received, nus_sent_cb_t on_nus_send,
-		   ble_connection_cb_t on_connect,
+int ble_utils_init(struct bt_nus_cb *nus_clbs, ble_connection_cb_t on_connect,
 		   ble_disconnection_cb_t on_disconnect)
 {
 	int ret;
-	struct bt_gatt_nus_cb *nus_clbs;
 
 	k_work_init(&on_connect_work, on_connect);
 	k_work_init(&on_disconnect_work, on_disconnect);
@@ -181,12 +193,19 @@ int ble_utils_init(nus_received_cb_t on_nus_received, nus_sent_cb_t on_nus_send,
 		settings_load();
 	}
 
-	nus_clbs = set_nus_clbs(on_nus_received, on_nus_send);
-	ret = bt_gatt_nus_init(nus_clbs);
+	ret = bt_nus_init(nus_clbs);
 	if (ret) {
 		LOG_ERR("Failed to initialize UART service (error: %d)", ret);
 		goto end;
 	}
+
+#if defined(CONFIG_MCUMGR_SMP_BT) && defined(CONFIG_MCUMGR_CMD_IMG_MGMT) &&    \
+	defined(CONFIG_MCUMGR_CMD_OS_MGMT)
+	os_mgmt_register_group();
+	img_mgmt_register_group();
+	img_mgmt_set_upload_cb(software_update_confirmation_handler, NULL);
+	smp_bt_register();
+#endif
 
 	ret = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd,
 			      ARRAY_SIZE(sd));

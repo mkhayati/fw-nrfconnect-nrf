@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _LED_STATE_H_
@@ -14,7 +14,7 @@
  */
 
 #include <zephyr/types.h>
-#include "led_event.h"
+#include <caf/events/led_event.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,7 +46,7 @@ enum led_id {
 	LED_ID_COUNT
 };
 
-#define LED_UNAVAILABLE CONFIG_DESKTOP_LED_COUNT
+#define LED_UNAVAILABLE 0xFF
 
 #if (defined(CONFIG_BT_PERIPHERAL) && defined(CONFIG_BT_CENTRAL)) || \
     (!defined(CONFIG_BT_PERIPHERAL) && !defined(CONFIG_BT_CENTRAL))

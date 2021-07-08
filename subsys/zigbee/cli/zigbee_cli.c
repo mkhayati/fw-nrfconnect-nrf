@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -20,7 +20,6 @@ static zb_uint8_t cli_ep;
 static zb_bool_t debug_mode = ZB_FALSE;
 
 LOG_MODULE_REGISTER(cli, CONFIG_ZIGBEE_SHELL_LOG_LEVEL);
-
 
 /**@brief Returns the Endpoint number used by the CLI.
  */

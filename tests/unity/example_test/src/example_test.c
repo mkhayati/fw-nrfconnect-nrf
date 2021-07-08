@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <unity.h>
 #include <uut.h>
@@ -15,6 +15,14 @@ bool runtime_CONFIG_UUT_PARAM_CHECK;
 void setUp(void)
 {
 	runtime_CONFIG_UUT_PARAM_CHECK = false;
+}
+
+/* Suite teardown shall finalize with mandatory call to generic_suiteTearDown. */
+extern int generic_suiteTearDown(int num_failures);
+
+int test_suiteTearDown(int num_failures)
+{
+	return generic_suiteTearDown(num_failures);
 }
 
 void test_uut_init(void)

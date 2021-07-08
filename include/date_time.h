@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef DATE_TIME_H__
@@ -9,6 +9,7 @@
 
 #include <zephyr/types.h>
 #include <time.h>
+#include <stdbool.h>
 
 /**
  * @defgroup date_time Date Time Library
@@ -54,7 +55,7 @@ typedef void (*date_time_evt_handler_t)(const struct date_time_evt *evt);
  *
  *  @return 0        If the operation was successful.
  *  @return -EINVAL  If a member of the passing variable new_date_time does not
- *                   adhere to the tm structure format.
+ *                   adhere to the tm structure format, or pointer is passed in as NULL.
  */
 int date_time_set(const struct tm *new_date_time);
 
@@ -69,7 +70,8 @@ int date_time_set(const struct tm *new_date_time);
  *
  *  @return 0        If the operation was successful.
  *  @return -ENODATA If the library does not have a valid date time UTC.
- *  @return -EINVAL  If the passing variable is too large or already converted.
+ *  @return -EINVAL  If the passed in pointer is NULL, dereferenced value is too large,
+ *		     or already converted.
  */
 int date_time_uptime_to_unix_time_ms(int64_t *uptime);
 
@@ -83,8 +85,22 @@ int date_time_uptime_to_unix_time_ms(int64_t *uptime);
  *
  *  @return 0        If the operation was successful.
  *  @return -ENODATA If the library does not have a valid date time UTC.
+ *  @return -EINVAL  If the passed in pointer is NULL.
  */
 int date_time_now(int64_t *unix_time_ms);
+
+/** @brief Convenience function that checks if the library has obtained
+ *	   an initial valid date time.
+ *
+ *  @note If this function returns false there is no point of
+ *	  subsequent calls to other functions in this API that
+ *	  depend on the validity of the internal date time. We
+ *	  know that they would fail beforehand.
+ *
+ *  @return true  The library has obtained an initial date time.
+ *  @return false The library has not obtained an initial date time.
+ */
+bool date_time_is_valid(void);
 
 /** @brief Register an event handler for Date time library events.
  *
@@ -121,7 +137,8 @@ int date_time_clear(void);
  *
  *  @param[in, out] unix_timestamp Pointer to a unix timestamp.
  *
- *  @return 0 If the operation was successful.
+ *  @return 0        If the operation was successful.
+ *  @return -EINVAL  If the passed in pointer is NULL.
  */
 int date_time_timestamp_clear(int64_t *unix_timestamp);
 

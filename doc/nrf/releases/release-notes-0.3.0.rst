@@ -3,6 +3,10 @@
 |NCS| v0.3.0 Release Notes
 ##########################
 
+.. contents::
+   :local:
+   :depth: 2
+
 This project is hosted by Nordic Semiconductor to demonstrate the integration of Nordic SoC support in open source projects, like MCUBoot and the Zephyr RTOS, with libraries and source code for low-power wireless applications.
 
 nRF Connect SDK v0.3.0 supports development with nRF9160 Cellular IoT devices.
@@ -98,16 +102,16 @@ nRF9160
   * **at_client**:
     This sample uses the **at_host** library to provide a UART interface for AT commands.
   * :ref:`asset_tracker`:
-    This sample uses the **nrf_cloud** library to transmit GPS and device orientation data to the nRF Cloud via LTE.
+    This sample uses the **nrf_cloud** library to transmit GPS and device orientation data to nRF Connect for Cloud via LTE.
   * :ref:`lte_sensor_gateway`:
-    This sample uses the **nrf_cloud** library to transmit sensor data collected via Bluetooth LE to the nRF Cloud via LTE.
+    This sample uses the **nrf_cloud** library to transmit sensor data collected via Bluetooth LE to nRF Connect for Cloud via LTE.
 
 * Added the following libraries:
 
   * **at_host**:
     This library helps creating an AT command socket and forwards requests and responses from and to the modem.
   * :ref:`lib_nrf_cloud`:
-    This library implements features to connect and send data to nRF Cloud services.
+    This library implements features to connect and send data to nRF Connect for Cloud services.
   * **bsdlib**:
     This library is a porting library for the BSD socket library that is located in the nrfxlib repository.
   * **mqtt_socket**:
@@ -155,7 +159,7 @@ Bluetooth Low Energy
   * :ref:`bluetooth_central_hids`:
     This sample connects to HID devices and uses the :ref:`gatt_dm_readme` library to perform HID service discovery.
   * :ref:`central_uart`:
-    This sample connects to NUS Servers and uses the :ref:`nus_c_readme` library to interact with them.
+    This sample connects to NUS Servers and uses the :ref:`nus_client_readme` library to interact with them.
     The sample can be tested with the :ref:`peripheral_uart` sample.
 
 * Added the following libraries:
@@ -164,7 +168,7 @@ Bluetooth Low Energy
     This library handles BLE scanning for your application.
   * :ref:`gatt_dm_readme`:
     This library handles service discovery on BLE GATT servers.
-  * :ref:`nus_c_readme`:
+  * :ref:`nus_client_readme`:
     This library can be used to act as a NUS Client.
 
 Bootloader
@@ -210,7 +214,7 @@ Known issues
 nRF9160
 =======
 
-* The :ref:`asset_tracker` sample does not wait for connection to nRF Cloud before trying to send data.
+* The :ref:`asset_tracker` sample does not wait for connection to nRF Connect for Cloud before trying to send data.
   This causes the sample to crash if the user toggles one of the switches before the board is connected to the cloud.
 * The :ref:`asset_tracker` sample might show up to 2.5 mA current consumption in idle mode with ``CONFIG_POWER_OPTIMIZATION_ENABLE=y``.
 * If a debugger (for example, J-Link) is connected via SWD to the nRF9160, the modem firmware will reset.

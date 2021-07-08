@@ -5,6 +5,10 @@
 Cheat Sheet
 ###########
 
+.. contents::
+   :local:
+   :depth: 2
+
 This topic is not meant to be included in the output, but to serve as reference for common RST syntax and linking between doc sets.
 
 RST syntax
@@ -133,6 +137,10 @@ We can create more complex tables as ASCII art:
    * - Gannet Ripple
      - 1.99
      - On a stick!
+   * - Line-break example
+     - x
+     - | First line
+       | Second line
 
 .. csv-table:: Frozen Delights!
    :header: "Treat", "Quantity", "Description"
@@ -143,24 +151,31 @@ We can create more complex tables as ASCII art:
    crunchy, now would it?"
    "Gannet Ripple", 1.99, "On a stick!"
 
+To force line-breaks in a table, use a line block:
+
+| First line
+| Second line
+
 
 Links
 =====
 
-Nulla aliquam lacinia risus `eget congue <http://www.nordicsemi.com>`_. Morbi posuere a nisi id `vulputate`_. Curabitur ac lacus magna. Aliquam urna lacus, ornare non iaculis vel, ullamcorper vel dolor. Nunc vel dui vulputate, imperdiet metus eget, tristique dui. Etiam non lorem vel magna dictum aliquam. Nunc hendrerit facilisis diam, non mollis leo commodo nec.
+Nulla aliquam lacinia risus `eget congue <https://www.nordicsemi.com>`_. Morbi posuere a nisi id `vulputate`_. Curabitur ac lacus magna. Aliquam urna lacus, ornare non iaculis vel, ullamcorper vel dolor. Nunc vel dui vulputate, imperdiet metus eget, tristique dui. Etiam non lorem vel magna dictum aliquam. Nunc hendrerit facilisis diam, non mollis leo commodo nec.
 
-.. _vulputate: http://www.nordicsemi.com
+.. _vulputate: https://www.nordicsemi.com
 
-www.nordicsemi.com http://www.nordicsemi.com
+www.nordicsemi.com https://www.nordicsemi.com
 
 :ref:`tables`
 
-`override <tables>`_
+`override <tables_>`_
 
 :ref:`Overriding link text <table>`
 
 Use :ref: to link to IDs and :doc: to link to files.
 
+If you have a link ID in :file:`links.txt` that consists of only one word, you cannot have a heading anywhere that is the same.
+If you do, you'll get an error about a duplicate ID in :file:`links.txt`.
 
 Images
 ======
@@ -186,6 +201,51 @@ Variables
 Curabitur nisl |sapien|, posuere auctor metus et, convallis varius turpis. Sed elementum rhoncus |sapien|, dictum posuere lectus.
 
 .. |sapien| replace:: some Latin word
+
+Reuse
+*****
+
+To reuse text from the same or another file in the same doc set:
+
+Include 1:
+  .. include:: cheat_sheet.rst
+     :start-line: 19
+     :end-line: 27
+
+Include 2:
+  .. include:: ../gs_installing.rst
+     :start-after: west-error-start
+     :end-before: west-error-end
+
+To reuse text from another doc set:
+
+Include 3:
+  .. ncs-include:: getting_started/installation_win.rst
+     :docset: zephyr
+     :auto-dedent:
+     :start-line: 10
+     :end-line: 18
+
+Include 4:
+  .. ncs-include:: nfc/doc/type_2_tag.rst
+     :docset: nrfxlib
+     :auto-dedent:
+     :start-after: Version 1.0*.
+     :end-before: If you use the supplied library,
+
+You can also use ncs-include if you want to use the indentation options inside the nrf doc set:
+
+Include 5 (similar to include 2, but improved indentation):
+  .. ncs-include:: ../gs_installing.rst
+     :start-after: west-error-start
+     :end-before: west-error-end
+     :auto-dedent:
+
+See https://github.com/nrfconnect/sdk-nrf/commit/fa5bd7330538f6a12e059c9d60fa2696e48fcf3a for implementation and usage.
+
+.. tip::
+   If you need a "start-after" text that occurs more than once inside a document, you can combine ``:start-after:`` with ``:start-line:``.
+   Sphinx will then use the first occurrence of the "start-after" text after the specified start line.
 
 Including text inside a nested list
 ===================================
@@ -220,6 +280,7 @@ Another list which includes the steps from the previous list:
 
    d. substepB4
    #. substepB5
+
 
 Including code snippets in RST
 ******************************
@@ -305,8 +366,8 @@ See `the breathe documentation <https://breathe.readthedocs.io/en/latest/directi
 
 To link to doxygen macros, enums or functions use:
 
-* :c:macro:`BT_GATT_HIDS_INFORMATION_LEN`
-* :cpp:func:`bt_gatt_hids_init`
+* :c:macro:`BT_HIDS_INFORMATION_LEN`
+* :c:func:`bt_hids_init`
 
 Linked RST project
 ==================

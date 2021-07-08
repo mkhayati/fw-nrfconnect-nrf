@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <shell/shell_bt_nus.h>
 #include <bluetooth/gatt.h>
@@ -17,6 +17,8 @@ SHELL_DEFINE(shell_bt_nus, "bt_nus:~$ ", &shell_transport_bt_nus,
 	     CONFIG_SHELL_BT_NUS_LOG_MESSAGE_QUEUE_SIZE,
 	     CONFIG_SHELL_BT_NUS_LOG_MESSAGE_QUEUE_TIMEOUT,
 	     SHELL_FLAG_OLF_CRLF);
+
+static K_SEM_DEFINE(shell_bt_nus_ready, 0, 1);
 
 static bool is_init;
 
@@ -39,14 +41,14 @@ static void tx_try(const struct shell_bt_nus *bt_nus)
 {
 	uint8_t *buf;
 	uint32_t size;
-	uint32_t req_len = bt_gatt_nus_max_send(bt_nus->ctrl_blk->conn);
+	uint32_t req_len = bt_nus_get_mtu(bt_nus->ctrl_blk->conn);
 
 	size = ring_buf_get_claim(bt_nus->tx_ringbuf, &buf, req_len);
 
 	if (size) {
 		int err, err2;
 
-		err = bt_gatt_nus_send(bt_nus->ctrl_blk->conn, buf, size);
+		err = bt_nus_send(bt_nus->ctrl_blk->conn, buf, size);
 		err2 = ring_buf_get_finish(bt_nus->tx_ringbuf, size);
 		__ASSERT_NO_MSG(err2 == 0);
 
@@ -72,6 +74,14 @@ static void tx_callback(struct bt_conn *conn)
 	tx_try(bt_nus);
 	bt_nus->ctrl_blk->handler(SHELL_TRANSPORT_EVT_TX_RDY,
 				  bt_nus->ctrl_blk->context);
+}
+
+static void send_enabled_callback(enum bt_nus_send_status status)
+{
+	if (status == BT_NUS_SEND_STATUS_ENABLED) {
+		LOG_DBG("NUS notification has been enabled");
+		k_sem_give(&shell_bt_nus_ready);
+	}
 }
 
 static int init(const struct shell_transport *transport,
@@ -104,6 +114,9 @@ static int enable(const struct shell_transport *transport, bool blocking_tx)
 		bt_nus->ctrl_blk->conn = NULL;
 		return -ENOTSUP;
 	}
+
+	LOG_DBG("Waiting for the NUS notification to be enabled");
+	k_sem_take(&shell_bt_nus_ready, K_FOREVER);
 
 	return 0;
 }
@@ -146,6 +159,7 @@ void shell_bt_nus_disable(void)
 			(const struct shell_bt_nus *)shell_transport_bt_nus.ctx;
 
 	bt_nus->ctrl_blk->conn = NULL;
+	k_sem_give(&shell_bt_nus_ready);
 }
 
 void shell_bt_nus_enable(struct bt_conn *conn)
@@ -159,6 +173,8 @@ void shell_bt_nus_enable(struct bt_conn *conn)
 		CONFIG_LOG_MAX_LEVEL : CONFIG_SHELL_BT_NUS_INIT_LOG_LEVEL;
 
 	bt_nus->ctrl_blk->conn = conn;
+
+	k_sem_reset(&shell_bt_nus_ready);
 
 	if (!is_init) {
 		err = shell_init(&shell_bt_nus, NULL, true, log_backend, level);
@@ -177,10 +193,11 @@ const struct shell_transport_api shell_bt_nus_transport_api = {
 
 int shell_bt_nus_init(void)
 {
-	struct bt_gatt_nus_cb callbacks = {
-		.received_cb = rx_callback,
-		.sent_cb = tx_callback
+	struct bt_nus_cb callbacks = {
+		.received = rx_callback,
+		.sent = tx_callback,
+		.send_enabled = send_enabled_callback
 	};
 
-	return bt_gatt_nus_init(&callbacks);
+	return bt_nus_init(&callbacks);
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019-2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <init.h>
@@ -13,39 +13,54 @@
 #include <irq.h>
 #include <device.h>
 
-#include <nrf_cc310_platform.h>
+#include <nrf_cc3xx_platform.h>
 
-#if CONFIG_HW_CC310
+#if CONFIG_HW_CC3XX
 
-static int hw_cc310_init(struct device *dev)
+static int hw_cc3xx_init_internal(const struct device *dev)
 {
+	ARG_UNUSED(dev);
+
 	int res;
 
-	__ASSERT_NO_MSG(dev != NULL);
-
-	/* Set the RTOS abort APIs */
-	nrf_cc310_platform_abort_init();
-
-	/* Set the RTOS mutex APIs */
-	nrf_cc310_platform_mutex_init();
-
-	/* Initialize the cc310 HW with or without RNG support */
-#if CONFIG_ENTROPY_CC310
-	res = nrf_cc310_platform_init();
+	/* Initialize the cc3xx HW with or without RNG support */
+#if CONFIG_ENTROPY_CC3XX
+	res = nrf_cc3xx_platform_init();
 #else
-	res = nrf_cc310_platform_init_no_rng();
+	res = nrf_cc3xx_platform_init_no_rng();
 #endif
+
 	return res;
 }
 
-DEVICE_INIT(hw_cc310, CONFIG_HW_CC310_NAME, hw_cc310_init,
-	    NULL, NULL, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+static int hw_cc3xx_init(const struct device *dev)
+{
+	int res;
 
-#endif /* CONFIG_HW_CC310 */
+	/* Set the RTOS abort APIs */
+	nrf_cc3xx_platform_abort_init();
 
-#if CONFIG_HW_CC310_INTERRUPT
+	/* Set the RTOS mutex APIs */
+	nrf_cc3xx_platform_mutex_init();
 
-void hw_cc310_interrupt_init(void)
+	/* Enable the hardware */
+	res = hw_cc3xx_init_internal(dev);
+	return res;
+}
+
+/* Driver initalization done when mutex is not usable (pre kernel) */
+SYS_INIT(hw_cc3xx_init_internal, PRE_KERNEL_1,
+	 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+
+/* Driver initialization when mutex is usable (post kernel) */
+SYS_INIT(hw_cc3xx_init, POST_KERNEL,
+	 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+
+#endif /* CONFIG_HW_CC3XX */
+
+#if CONFIG_HW_CC3XX_INTERRUPT
+
+void hw_cc3XX_interrupt_init(void)
 {
 	IRQ_CONNECT(DT_ARM_CRYPTOCELL_310_ARM_CRYPTOCELL_310_IRQ_0,
 		    DT_ARM_CRYPTOCELL_310_ARM_CRYPTOCELL_310_IRQ_0_PRIORITY,
@@ -53,4 +68,4 @@ void hw_cc310_interrupt_init(void)
 	irq_enable(DT_ARM_CRYPTOCELL_310_ARM_CRYPTOCELL_310_IRQ_0);
 }
 
-#endif /* CONFIG_HW_CC310_INTERRUPT */
+#endif /* CONFIG_HW_CC3XX_INTERRUPT */

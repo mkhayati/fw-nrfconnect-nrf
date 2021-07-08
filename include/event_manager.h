@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -21,7 +21,7 @@
 
 #include <zephyr.h>
 #include <zephyr/types.h>
-#include <power/reboot.h>
+#include <sys/reboot.h>
 #include <sys/__assert.h>
 #include <logging/log_ctrl.h>
 

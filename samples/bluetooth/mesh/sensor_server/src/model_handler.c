@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <bluetooth/bluetooth.h>
@@ -19,7 +19,7 @@ static const struct bt_mesh_sensor_column columns[] = {
 	{ { 30 }, { 100 } },
 };
 
-static struct device *dev;
+static const struct device *dev;
 static uint32_t tot_temp_samps;
 static uint32_t col_samps[ARRAY_SIZE(columns)];
 
@@ -118,7 +118,7 @@ static struct bt_mesh_sensor *const sensors[] = {
 static struct bt_mesh_sensor_srv sensor_srv =
 	BT_MESH_SENSOR_SRV_INIT(sensors, ARRAY_SIZE(sensors));
 
-static struct k_delayed_work end_of_presence_work;
+static struct k_work_delayable end_of_presence_work;
 
 static void end_of_presence(struct k_work *work)
 {
@@ -159,7 +159,7 @@ static void button_handler_cb(uint32_t pressed, uint32_t changed)
 
 		prev_pres = k_uptime_get_32();
 
-		k_delayed_work_submit(&end_of_presence_work, K_MSEC(2000));
+		k_work_reschedule(&end_of_presence_work, K_MSEC(2000));
 	}
 }
 
@@ -167,23 +167,11 @@ static struct button_handler button_handler = {
 	.cb = button_handler_cb,
 };
 
-/** Configuration server definition */
-static struct bt_mesh_cfg_srv cfg_srv = {
-	.relay = IS_ENABLED(CONFIG_BT_MESH_RELAY),
-	.beacon = BT_MESH_BEACON_ENABLED,
-	.frnd = IS_ENABLED(CONFIG_BT_MESH_FRIEND),
-	.gatt_proxy = IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY),
-	.default_ttl = 7,
-
-	/* 3 transmissions with 20ms interval */
-	.net_transmit = BT_MESH_TRANSMIT(2, 20),
-	.relay_retransmit = BT_MESH_TRANSMIT(2, 20),
-};
-
 /* Set up a repeating delayed work to blink the DK's LEDs when attention is
  * requested.
  */
-static struct k_delayed_work attention_blink_work;
+static struct k_work_delayable attention_blink_work;
+static bool attention;
 
 static void attention_blink(struct k_work *work)
 {
@@ -194,19 +182,25 @@ static void attention_blink(struct k_work *work)
 		BIT(2) | BIT(3),
 		BIT(3) | BIT(0),
 	};
-	dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
-	k_delayed_work_submit(&attention_blink_work, K_MSEC(30));
+
+	if (attention) {
+		dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
+		k_work_reschedule(&attention_blink_work, K_MSEC(30));
+	} else {
+		dk_set_leds(DK_NO_LEDS_MSK);
+	}
 }
 
 static void attention_on(struct bt_mesh_model *mod)
 {
-	k_delayed_work_submit(&attention_blink_work, K_NO_WAIT);
+	attention = true;
+	k_work_reschedule(&attention_blink_work, K_NO_WAIT);
 }
 
 static void attention_off(struct bt_mesh_model *mod)
 {
-	k_delayed_work_cancel(&attention_blink_work);
-	dk_set_leds(DK_NO_LEDS_MSK);
+	/* Will stop rescheduling blink timer */
+	attention = false;
 }
 
 static const struct bt_mesh_health_srv_cb health_srv_cb = {
@@ -222,7 +216,7 @@ BT_MESH_HEALTH_PUB_DEFINE(health_pub, 0);
 
 static struct bt_mesh_elem elements[] = {
 	BT_MESH_ELEM(1,
-		     BT_MESH_MODEL_LIST(BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+		     BT_MESH_MODEL_LIST(BT_MESH_MODEL_CFG_SRV,
 					BT_MESH_MODEL_HEALTH_SRV(&health_srv,
 								 &health_pub),
 					BT_MESH_MODEL_SENSOR_SRV(&sensor_srv)),
@@ -237,8 +231,8 @@ static const struct bt_mesh_comp comp = {
 
 const struct bt_mesh_comp *model_handler_init(void)
 {
-	k_delayed_work_init(&attention_blink_work, attention_blink);
-	k_delayed_work_init(&end_of_presence_work, end_of_presence);
+	k_work_init_delayable(&attention_blink_work, attention_blink);
+	k_work_init_delayable(&end_of_presence_work, end_of_presence);
 
 	dev = device_get_binding(DT_PROP(DT_NODELABEL(temp), label));
 

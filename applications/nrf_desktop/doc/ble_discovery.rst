@@ -3,6 +3,10 @@
 Bluetooth LE discovery module
 #############################
 
+.. contents::
+   :local:
+   :depth: 2
+
 Use the |ble_discovery| to discover GATT Services and read GATT Attribute Values from an nRF Desktop peripheral.
 The module is mandatory for the nRF Desktop central.
 
@@ -35,7 +39,7 @@ Complete the following steps to configure the module:
    * Parameters defined separately for every peripheral:
 
      * Product ID (PID)
-     * Peer type (:cpp:enum:`PEER_TYPE_MOUSE` or :cpp:enum:`PEER_TYPE_KEYBOARD`)
+     * Peer type (:c:enumerator:`PEER_TYPE_MOUSE` or :c:enumerator:`PEER_TYPE_KEYBOARD`)
 
    For an example of the module configuration, see :file:`configuration/nrf52840dongle_nrf52840/ble_discovery_def.h`.
 
@@ -45,7 +49,7 @@ Complete the following steps to configure the module:
 
         The assigned PIDs should be unique for devices with the same VID.
 
-#. Set the ``CONFIG_DESKTOP_BLE_DISCOVERY_ENABLE`` Kconfig option to enable the ``ble_discovery`` application module.
+#. Set the :option:`CONFIG_DESKTOP_BLE_DISCOVERY_ENABLE` Kconfig option to enable the ``ble_discovery`` application module.
 
 Implementation details
 **********************
@@ -55,7 +59,7 @@ The |ble_discovery| implementation is tasked with peripheral discovery and verif
 Peripheral discovery
 ====================
 
-The module starts the peripheral device discovery when it receives ``ble_peer_event`` with :cpp:member:`state` set to :cpp:enum:`PEER_STATE_SECURED`.
+The module starts the peripheral device discovery when it receives :c:struct:`ble_peer_event` with :c:member:`ble_peer_event.state` set to :c:enumerator:`PEER_STATE_SECURED`.
 
 The peripheral discovery consists of the following steps:
 

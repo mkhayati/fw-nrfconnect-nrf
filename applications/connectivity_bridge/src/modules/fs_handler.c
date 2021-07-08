@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -44,6 +44,7 @@ static int fs_init(void)
 	/* The default RAM disk may contain unwanted files. Erase these. */
 	struct fs_dir_t dir;
 
+	fs_dir_t_init(&dir);
 	err = fs_opendir(&dir, FATFS_MNTP "/");
 	if (err) {
 		LOG_ERR("fs_opendir: %d", err);

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  *
  */
 #include <zephyr.h>
@@ -13,7 +13,7 @@
 #include <metal/device.h>
 #include <metal/alloc.h>
 
-#include <nrf_errno.h>
+#include <nrf_rpc_errno.h>
 
 #include "rp_ll.h"
 
@@ -46,10 +46,10 @@ BUILD_ASSERT(VRING_RX_ADDRESS >= SHM_START_ADDR);
 
 /* Handlers for TX and RX channels */
 /* TX handler */
-static struct device *ipm_tx_handle;
+static const struct device *ipm_tx_handle;
 
 /* RX handler */
-static struct device *ipm_rx_handle;
+static const struct device *ipm_rx_handle;
 
 static struct rpmsg_virtio_device rvdev;
 struct rpmsg_device *rdev;
@@ -125,7 +125,7 @@ const struct virtio_dispatch dispatch = {
 };
 
 /* Callback launch right after some data has arrived. */
-static void ipm_callback(struct device *ipmdev, void *user_data, uint32_t id,
+static void ipm_callback(const struct device *ipmdev, void *user_data, uint32_t id,
 			 volatile void *data)
 {
 	k_work_submit_to_queue(&my_work_q, &work_item);
@@ -277,9 +277,9 @@ int rp_ll_init(void)
 	/* Get RPMsg device from RPMsg VirtIO device. */
 	rdev = rpmsg_virtio_get_rpmsg_device(&rvdev);
 
-	k_work_q_start(&my_work_q, rx_thread_stack,
+	k_work_queue_start(&my_work_q, rx_thread_stack,
 		K_THREAD_STACK_SIZEOF(rx_thread_stack),
-		CONFIG_NRF_RPC_TR_PRMSG_RX_PRIORITY);
+		CONFIG_NRF_RPC_TR_PRMSG_RX_PRIORITY, NULL);
 	k_work_init(&work_item, work_callback);
 
 	LOG_DBG("initializing %s: SUCCESS", __func__);

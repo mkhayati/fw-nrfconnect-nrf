@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <kernel.h>
@@ -13,15 +13,16 @@
 
 #include <mpsl_timeslot.h>
 #include <mpsl.h>
+#include <hal/nrf_timer.h>
 
 #define TIMESLOT_REQUEST_DISTANCE_US (1000000)
 #define TIMESLOT_LENGTH_US           (200)
+#define TIMER_EXPIRY_US (TIMESLOT_LENGTH_US - 50)
 
 #define MPSL_THREAD_PRIO             CONFIG_MPSL_THREAD_COOP_PRIO
 #define STACKSIZE                    CONFIG_MAIN_STACK_SIZE
 #define THREAD_PRIORITY              K_LOWEST_APPLICATION_THREAD_PRIO
 
-static volatile int timeslot_counter;
 static bool request_in_cb = true;
 
 /* MPSL API calls that can be requested for the non-preemptible thread */
@@ -73,7 +74,27 @@ static mpsl_timeslot_signal_return_param_t *mpsl_timeslot_callback(
 	mpsl_timeslot_signal_return_param_t *p_ret_val = NULL;
 
 	switch (signal_type) {
+
 	case MPSL_TIMESLOT_SIGNAL_START:
+		/* No return action */
+		signal_callback_return_param.callback_action =
+			MPSL_TIMESLOT_SIGNAL_ACTION_NONE;
+		p_ret_val = &signal_callback_return_param;
+
+		/* Setup timer to trigger an interrupt (and thus the TIMER0
+		 * signal) before timeslot end.
+		 */
+		nrf_timer_cc_set(NRF_TIMER0, NRF_TIMER_CC_CHANNEL0,
+			TIMER_EXPIRY_US);
+		nrf_timer_int_enable(NRF_TIMER0, NRF_TIMER_INT_COMPARE0_MASK);
+
+		break;
+	case MPSL_TIMESLOT_SIGNAL_TIMER0:
+
+		/* Clear event */
+		nrf_timer_int_disable(NRF_TIMER0, NRF_TIMER_INT_COMPARE0_MASK);
+		nrf_timer_event_clear(NRF_TIMER0, NRF_TIMER_EVENT_COMPARE0);
+
 		if (request_in_cb) {
 			/* Request new timeslot when callback returns */
 			signal_callback_return_param.params.request.p_next =
@@ -81,23 +102,20 @@ static mpsl_timeslot_signal_return_param_t *mpsl_timeslot_callback(
 			signal_callback_return_param.callback_action =
 				MPSL_TIMESLOT_SIGNAL_ACTION_REQUEST;
 		} else {
-			/* No return action, so timeslot will be ended */
-			signal_callback_return_param.params.request.p_next =
-				NULL;
+			/* Timeslot will be ended */
 			signal_callback_return_param.callback_action =
-				MPSL_TIMESLOT_SIGNAL_ACTION_NONE;
+				MPSL_TIMESLOT_SIGNAL_ACTION_END;
 		}
 
 		p_ret_val = &signal_callback_return_param;
+
 		break;
 	case MPSL_TIMESLOT_SIGNAL_SESSION_IDLE:
 		break;
 	case MPSL_TIMESLOT_SIGNAL_SESSION_CLOSED:
 		break;
-	case MPSL_TIMESLOT_SIGNAL_CANCELLED:
-	case MPSL_TIMESLOT_SIGNAL_BLOCKED:
-	case MPSL_TIMESLOT_SIGNAL_INVALID_RETURN:
 	default:
+		printk("unexpected signal: %u", signal_type);
 		error();
 		break;
 	}
@@ -208,6 +226,9 @@ static void console_print_thread(void)
 			switch (signal_type) {
 			case MPSL_TIMESLOT_SIGNAL_START:
 				printk("Callback: Timeslot start\n");
+				break;
+			case MPSL_TIMESLOT_SIGNAL_TIMER0:
+				printk("Callback: Timer0 signal\n");
 				break;
 			case MPSL_TIMESLOT_SIGNAL_SESSION_IDLE:
 				printk("Callback: Session idle\n");

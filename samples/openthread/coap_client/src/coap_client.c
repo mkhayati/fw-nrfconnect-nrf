@@ -1,8 +1,9 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
+
 #include <zephyr.h>
 #include <dk_buttons_and_leds.h>
 #include <logging/log.h>
@@ -11,8 +12,12 @@
 
 #include "coap_client_utils.h"
 
-#if CONFIG_BT_GATT_NUS
+#if CONFIG_BT_NUS
 #include "ble_utils.h"
+#endif
+
+#ifdef CONFIG_BOOTLOADER_MCUBOOT
+#include <dfu/mcuboot.h>
 #endif
 
 LOG_MODULE_REGISTER(coap_client, CONFIG_COAP_CLIENT_LOG_LEVEL);
@@ -23,7 +28,7 @@ LOG_MODULE_REGISTER(coap_client, CONFIG_COAP_CLIENT_LOG_LEVEL);
 #define BLE_CONNECTION_LED DK_LED2
 #define MTD_SED_LED DK_LED3
 
-#if CONFIG_BT_GATT_NUS
+#if CONFIG_BT_NUS
 
 #define COMMAND_REQUEST_UNICAST 'u'
 #define COMMAND_REQUEST_MULTICAST 'm'
@@ -32,12 +37,12 @@ LOG_MODULE_REGISTER(coap_client, CONFIG_COAP_CLIENT_LOG_LEVEL);
 static void on_nus_received(struct bt_conn *conn, const uint8_t *const data,
 			    uint16_t len)
 {
-	LOG_INF("Received data: %s", log_strdup(data));
-
 	if (len != 1) {
-		LOG_WRN("Received invalid data length from NUS");
+		LOG_WRN("Received invalid data length (%hd) from NUS", len);
 		return;
 	}
+
+	LOG_INF("Received data: %c", data[0]);
 
 	switch (*data) {
 	case COMMAND_REQUEST_UNICAST:
@@ -71,7 +76,7 @@ static void on_ble_disconnect(struct k_work *item)
 	dk_set_led_off(BLE_CONNECTION_LED);
 }
 
-#endif /* CONFIG_BT_GATT_NUS */
+#endif /* CONFIG_BT_NUS */
 
 static void on_ot_connect(struct k_work *item)
 {
@@ -89,15 +94,13 @@ static void on_ot_disconnect(struct k_work *item)
 
 static void on_mtd_mode_toggle(uint32_t med)
 {
-#if IS_ENABLED(CONFIG_DEVICE_POWER_MANAGEMENT)
-	struct device *cons = device_get_binding(CONSOLE_LABEL);
+#if IS_ENABLED(CONFIG_PM_DEVICE)
+	const struct device *cons = device_get_binding(CONSOLE_LABEL);
 
 	if (med) {
-		device_set_power_state(cons, DEVICE_PM_ACTIVE_STATE,
-				       NULL, NULL);
+		pm_device_state_set(cons, PM_DEVICE_STATE_ACTIVE, NULL, NULL);
 	} else {
-		device_set_power_state(cons, DEVICE_PM_OFF_STATE,
-				       NULL, NULL);
+		pm_device_state_set(cons, PM_DEVICE_STATE_OFF, NULL, NULL);
 	}
 #endif
 	dk_set_led(MTD_SED_LED, med);
@@ -134,6 +137,20 @@ void main(void)
 		power_down_unused_ram();
 	}
 
+#ifdef CONFIG_BOOTLOADER_MCUBOOT
+	/* Check if the image is run in the REVERT mode and eventually
+	 * confirm it to prevent reverting on the next boot.
+	 */
+	if (mcuboot_swap_type() == BOOT_SWAP_TYPE_REVERT) {
+		if (boot_write_img_confirmed()) {
+			LOG_ERR("Confirming firmware image failed, it will be reverted on the next "
+				"boot.");
+		} else {
+			LOG_INF("New device firmware image confirmed.");
+		}
+	}
+#endif
+
 	ret = dk_buttons_init(on_button_changed);
 	if (ret) {
 		LOG_ERR("Cannot init buttons (error: %d)", ret);
@@ -142,19 +159,23 @@ void main(void)
 
 	ret = dk_leds_init();
 	if (ret) {
-		LOG_ERR("Connot init leds, (error: %d)", ret);
+		LOG_ERR("Cannot init leds, (error: %d)", ret);
 		return;
 	}
 
-#if CONFIG_BT_GATT_NUS
-	ret = ble_utils_init(&on_nus_received, NULL, on_ble_connect,
-			     on_ble_disconnect);
+#if CONFIG_BT_NUS
+	struct bt_nus_cb nus_clbs = {
+		.received = on_nus_received,
+		.sent = NULL,
+	};
+
+	ret = ble_utils_init(&nus_clbs, on_ble_connect, on_ble_disconnect);
 	if (ret) {
 		LOG_ERR("Cannot init BLE utilities");
 		return;
 	}
 
-#endif /* CONFIG_BT_GATT_NUS */
+#endif /* CONFIG_BT_NUS */
 
 	coap_client_utils_init(on_ot_connect, on_ot_disconnect,
 			       on_mtd_mode_toggle);

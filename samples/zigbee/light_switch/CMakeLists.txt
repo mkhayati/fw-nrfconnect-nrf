@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2020 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 cmake_minimum_required(VERSION 3.13.1)
@@ -15,7 +15,7 @@ target_sources(app PRIVATE
   src/main.c
 )
 
-target_sources_ifdef(CONFIG_BT_GATT_NUS app PRIVATE
+target_sources_ifdef(CONFIG_BT_NUS app PRIVATE
   src/nus_cmd.c
 )
 

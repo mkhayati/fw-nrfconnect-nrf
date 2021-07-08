@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -31,9 +31,11 @@ struct bt_mesh_lightness_set {
 	/** Lightness level. */
 	uint16_t lvl;
 	/**
-	 * Transition time parameters for the state change. Setting the
-	 * transition to NULL makes the server use its default transition time
-	 * parameters.
+	 * Transition time parameters for the state change, or NULL.
+	 *
+	 * When sending, setting the transition to NULL makes the receiver use
+	 * its default transition time parameters, or 0 if no default transition
+	 * time is set.
 	 */
 	const struct bt_mesh_model_transition *transition;
 };
@@ -45,8 +47,9 @@ struct bt_mesh_lightness_status {
 	/** Target Lightness level. */
 	uint16_t target;
 	/**
-	 * Time remaining of the ongoing transition, or @em K_FOREVER.
-	 * If there's no ongoing transition, @c remaining_time is 0.
+	 * Time remaining of the ongoing transition in milliseconds, or
+	 * @em SYS_FOREVER_MS. If there's no ongoing transition,
+	 * @c remaining_time is 0.
 	 */
 	int32_t remaining_time;
 };

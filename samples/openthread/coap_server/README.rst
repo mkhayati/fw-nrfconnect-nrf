@@ -3,14 +3,18 @@
 Thread: CoAP Server
 ###################
 
-The Thread CoAP Server sample demonstrates controlling light resources within an OpenThread network.
-This sample exposes resorces in the network and requires another sample that is compatible with the OpenThread network to access them.
+.. contents::
+   :local:
+   :depth: 2
+
+The :ref:`Thread <ug_thread>` CoAP Server sample demonstrates controlling light resources within an OpenThread network.
+This sample exposes resources in the network and requires another sample that is compatible with the OpenThread network to access them.
 The recommended sample referenced on this page is :ref:`coap_client_sample`.
 
 Overview
 ********
 
-This sample demnstrates how to expose resources that can be accessed by other devices in the same Thread network.
+This sample demonstrates how to expose resources that can be accessed by other devices in the same Thread network.
 You can use this sample application as a starting point to implement a :ref:`CoAP <zephyr:coap_sock_interface>` application.
 
 The following CoAP resources are exposed on the network by this sample:
@@ -22,6 +26,13 @@ This sample uses the native `OpenThread CoAP API`_ for communication.
 For new application development, use :ref:`Zephyr's CoAP API<zephyr:coap_sock_interface>`.
 For example usage of the Zephyr CoAp API, see the :ref:`coap_client_sample` sample.
 
+FEM support
+===========
+
+.. |fem_file_path| replace:: :file:`samples/openthread/common`
+
+.. include:: /includes/sample_fem_support.txt
+
 Requirements
 ************
 
@@ -29,7 +40,7 @@ The sample supports the following development kits:
 
 .. table-from-rows:: /includes/sample_board_rows.txt
    :header: heading
-   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833
+   :rows: nrf5340dk_nrf5340_cpuapp, nrf52840dk_nrf52840, nrf52833dk_nrf52833, nrf21540dk_nrf52840
 
 You can use one or more of the development kits listed above as the Thread CoAP Server.
 You also need one or more compatible development kits programmed with the :ref:`coap_client_sample` sample.
@@ -85,14 +96,11 @@ Running OpenThread CLI commands
 You can connect to any of the Simple CoAP Server or Simple CoAP Client nodes through a serial port.
 For more details, see :ref:`putty`.
 
-.. note::
-     |thread_hwfc_enabled|
-
 Once the serial connection is ready, you can run OpenThread CLI commands.
 For complete CLI documentation, refer to `OpenThread CLI Reference`_.
 
 .. note::
-    In Zephyr shell, every OpenThread command needs to be prepended with the `ot` keyword.
+    In Zephyr shell, every OpenThread command needs to be preceded with the `ot` keyword.
     For example, ``ot channel 20``.
 
 Dependencies

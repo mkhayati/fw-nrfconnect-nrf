@@ -3,10 +3,14 @@
 Sensor Server
 #############
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Sensor Server model holds a list of sensors, and exposes them to the mesh network.
 There may be multiple Sensor Server models on a single mesh node, and each model may hold up to 47 sensors.
 
-The Sensor Server Model adds two model instances in the composition data:
+The Sensor Server model adds two model instances in the composition data:
 
 * Sensor Server
 * Sensor Setup Server
@@ -15,13 +19,13 @@ The two model instances share the states of the Sensor Server, but accept differ
 This allows for a fine-grained control of the access rights for the Sensor Server states, as the two model instances can be bound to different application keys.
 
 * Sensor Server is the user-facing model in the pair.
-  It provides access to the Sensor Descriptors, the Sensor Data, and Sensor Series, all of which are read-only states.
-* Sensor Setup Server provides access to the Sensor Cadence and Sensor Settings, allowing configurator devices to set up the publish rate and parameters for each sensor.
+  It provides access to read-only states Sensor Descriptors, Sensor Data, and Sensor Series.
+* Sensor Setup Server provides access to Sensor Cadence and Sensor Settings, allowing configurator devices to set up the publish rate and parameters for each sensor.
 
 Configuration
 =============
 
-The Sensor Server model requires a list of :cpp:type:`bt_mesh_sensor` pointers at compile time.
+The Sensor Server model requires a list of :c:struct:`bt_mesh_sensor` pointers at compile time.
 The list of sensors cannot be changed at runtime, and only one of each type of sensors can be held by a Sensor Server.
 To expose multiple sensors of the same type, multiple Sensor Servers must be instantiated on different elements.
 
@@ -72,6 +76,9 @@ The Sensor Server stores the cadence state of each sensor instance persistently,
 
 Any other data is managed by the application and must be stored separately.
 This applies for example to sensor settings or sample data.
+
+If :option:`CONFIG_BT_SETTINGS` is enabled, the Sensor Server stores all its states persistently using a configurable storage delay to stagger storing.
+See :option:`CONFIG_BT_MESH_MODEL_SRV_STORE_TIMEOUT`.
 
 API documentation
 =================

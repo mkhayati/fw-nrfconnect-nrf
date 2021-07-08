@@ -1,8 +1,9 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
+
 #include <kernel.h>
 #include <drivers/uart.h>
 #include <zboss_api.h>
@@ -12,7 +13,7 @@
 
 static K_SEM_DEFINE(tx_done_sem, 1, 1);
 static K_SEM_DEFINE(rx_done_sem, 1, 1);
-static struct device *uart_dev;
+static const struct device *uart_dev;
 static bool is_sleeping;
 
 static zb_callback_t char_handler;
@@ -106,10 +107,10 @@ static void uart_rx_timeout(struct k_timer *dummy)
 	}
 }
 
-static void handle_rx_ready_evt(struct device *dev)
+static void handle_rx_ready_evt(const struct device *dev)
 {
 	int recv_len = 0;
-	uint8_t buffer[CONFIG_ZIGBEE_UART_RX_BUF_LEN];
+	uint8_t buffer[CONFIG_ZIGBEE_UART_RX_BUF_LEN] = {0};
 
 	/* Copy data to the user's buffer. */
 	if (uart_rx_buf && (uart_rx_buf_offset < uart_rx_buf_len)) {
@@ -157,7 +158,7 @@ static void handle_rx_ready_evt(struct device *dev)
 	}
 }
 
-static void handle_tx_ready_evt(struct device *dev)
+static void handle_tx_ready_evt(const struct device *dev)
 {
 	if (uart_tx_buf_len <= uart_tx_buf_offset) {
 		uart_irq_tx_disable(dev);
@@ -191,7 +192,7 @@ static void handle_tx_ready_evt(struct device *dev)
 	}
 }
 
-static void interrupt_handler(struct device *dev, void *user_data)
+static void interrupt_handler(const struct device *dev, void *user_data)
 {
 	while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
 		if (uart_irq_rx_ready(dev)) {
@@ -277,8 +278,11 @@ void zb_osif_uart_wake_up(void)
 	uart_irq_rx_enable(uart_dev);
 }
 
-void zb_osif_serial_put_bytes(zb_uint8_t *buf, zb_short_t len)
+void zb_osif_serial_put_bytes(const zb_uint8_t *buf, zb_short_t len)
 {
+#if !(defined(ZB_HAVE_ASYNC_SERIAL) && \
+	defined(CONFIG_ZBOSS_TRACE_LOG_LEVEL_OFF))
+
 	if ((uart_dev == NULL) || is_sleeping) {
 		return;
 	}
@@ -288,8 +292,8 @@ void zb_osif_serial_put_bytes(zb_uint8_t *buf, zb_short_t len)
 	}
 
 	/*
-	 * Wait forever since there is no way to inform higher layer about
-	 * TX busy state.
+	 * Wait forever since there is no way to inform higher layer
+	 * about TX busy state.
 	 */
 	(void)k_sem_take(&tx_done_sem, K_FOREVER);
 	memcpy(uart_tx_buf, buf, len);
@@ -299,6 +303,8 @@ void zb_osif_serial_put_bytes(zb_uint8_t *buf, zb_short_t len)
 
 	/* Enable tx interrupts. */
 	uart_irq_tx_enable(uart_dev);
+
+#endif /* !(ZB_HAVE_ASYNC_SERIAL && CONFIG_ZBOSS_TRACE_LOG_LEVEL_OFF) */
 }
 
 void zb_osif_serial_recv_data(zb_uint8_t *buf, zb_ushort_t len)

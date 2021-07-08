@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -15,8 +15,8 @@
 
 #include <zboss_api.h>
 #include <zb_mem_config_max.h>
-#include <zb_error_handler.h>
-#include <zigbee_helpers.h>
+#include <zigbee/zigbee_error_handler.h>
+#include <zigbee/zigbee_app_utils.h>
 #include <zb_nrf_platform.h>
 
 

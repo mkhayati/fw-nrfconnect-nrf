@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <date_time.h>
@@ -46,7 +46,8 @@ LOG_MODULE_REGISTER(date_time, CONFIG_DATE_TIME_LOG_LEVEL);
 
 struct ntp_servers {
 	const char *server_str;
-	struct addrinfo *addr;
+	struct sockaddr addr;
+	socklen_t addrlen;
 };
 
 struct ntp_servers servers[] = {
@@ -62,7 +63,7 @@ static struct sntp_time sntp_time;
 
 K_SEM_DEFINE(time_fetch_sem, 0, 1);
 
-static struct k_delayed_work time_work;
+static struct k_work_delayable time_work;
 
 static struct time_aux {
 	int64_t date_time_utc;
@@ -143,25 +144,40 @@ static int sntp_time_request(struct ntp_servers *server, uint32_t timeout,
 {
 	int err;
 	static struct addrinfo hints;
+	struct addrinfo *addrinfo;
 	struct sntp_ctx sntp_ctx;
 
-	hints.ai_family = AF_INET;
+	if (IS_ENABLED(CONFIG_DATE_TIME_IPV6)) {
+		hints.ai_family = AF_INET6;
+	} else {
+		hints.ai_family = AF_INET;
+	}
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_protocol = 0;
 
-	if (server->addr == NULL) {
+	if (server->addrlen == 0) {
 		err = getaddrinfo(server->server_str, NTP_DEFAULT_PORT, &hints,
-				  &server->addr);
+				  &addrinfo);
 		if (err) {
 			LOG_WRN("getaddrinfo, error: %d", err);
 			return err;
 		}
+
+		if (addrinfo->ai_addrlen > sizeof(server->addr)) {
+			LOG_WRN("getaddrinfo, addrlen: %d > %d",
+				addrinfo->ai_addrlen, sizeof(server->addr));
+			freeaddrinfo(addrinfo);
+			return -ENOMEM;
+		}
+
+		memcpy(&server->addr, addrinfo->ai_addr, addrinfo->ai_addrlen);
+		server->addrlen = addrinfo->ai_addrlen;
+		freeaddrinfo(addrinfo);
 	} else {
 		LOG_DBG("Server address already obtained, skipping DNS lookup");
 	}
 
-	err = sntp_init(&sntp_ctx, server->addr->ai_addr,
-			server->addr->ai_addrlen);
+	err = sntp_init(&sntp_ctx, &server->addr, server->addrlen);
 	if (err) {
 		LOG_WRN("sntp_init, error: %d", err);
 		goto socket_close;
@@ -241,20 +257,6 @@ static void new_date_time_get(void)
 
 		LOG_DBG("Current time not valid");
 
-#if defined(CONFIG_DATE_TIME_MODEM)
-		LOG_DBG("Fallback on cellular network time");
-
-		err = time_modem_get();
-		if (err == 0) {
-			LOG_DBG("Time from cellular network obtained");
-			initial_valid_time = true;
-			evt.type = DATE_TIME_OBTAINED_MODEM;
-			date_time_notify_event(&evt);
-			continue;
-		}
-
-		LOG_DBG("Not getting cellular network time");
-#endif
 #if defined(CONFIG_DATE_TIME_NTP)
 		LOG_DBG("Fallback on NTP server");
 
@@ -269,6 +271,20 @@ static void new_date_time_get(void)
 
 		LOG_DBG("Not getting time from NTP server");
 #endif
+#if defined(CONFIG_DATE_TIME_MODEM)
+		LOG_DBG("Fallback on cellular network time");
+
+		err = time_modem_get();
+		if (err == 0) {
+			LOG_DBG("Time from cellular network obtained");
+			initial_valid_time = true;
+			evt.type = DATE_TIME_OBTAINED_MODEM;
+			date_time_notify_event(&evt);
+			continue;
+		}
+
+		LOG_DBG("Not getting cellular network time");
+#endif
 		LOG_DBG("Not getting time from any time source");
 
 		evt.type = DATE_TIME_NOT_OBTAINED;
@@ -278,7 +294,7 @@ static void new_date_time_get(void)
 
 K_THREAD_DEFINE(time_thread, CONFIG_DATE_TIME_THREAD_SIZE,
 		new_date_time_get, NULL, NULL, NULL,
-		K_HIGHEST_APPLICATION_THREAD_PRIO, 0, 0);
+		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 static void date_time_handler(struct k_work *work)
 {
@@ -288,16 +304,14 @@ static void date_time_handler(struct k_work *work)
 		LOG_DBG("New date time update in: %d seconds",
 			CONFIG_DATE_TIME_UPDATE_INTERVAL_SECONDS);
 
-		k_delayed_work_submit(&time_work,
-			K_SECONDS(CONFIG_DATE_TIME_UPDATE_INTERVAL_SECONDS));
+		k_work_schedule(&time_work, K_SECONDS(CONFIG_DATE_TIME_UPDATE_INTERVAL_SECONDS));
 	}
 }
 
-static int date_time_init(struct device *unused)
+static int date_time_init(const struct device *unused)
 {
-	k_delayed_work_init(&time_work, date_time_handler);
-	k_delayed_work_submit(&time_work,
-			K_SECONDS(CONFIG_DATE_TIME_UPDATE_INTERVAL_SECONDS));
+	k_work_init_delayable(&time_work, date_time_handler);
+	k_work_schedule(&time_work, K_SECONDS(CONFIG_DATE_TIME_UPDATE_INTERVAL_SECONDS));
 
 	return 0;
 }
@@ -305,6 +319,11 @@ static int date_time_init(struct device *unused)
 int date_time_set(const struct tm *new_date_time)
 {
 	int err = 0;
+
+	if (new_date_time == NULL) {
+		LOG_ERR("The passed in pointer cannot be NULL");
+		return -EINVAL;
+	}
 
 	/** Seconds after the minute. tm_sec is generally 0-59.
 	 *  The extra range is to accommodate for leap seconds
@@ -373,7 +392,14 @@ int date_time_set(const struct tm *new_date_time)
 
 int date_time_uptime_to_unix_time_ms(int64_t *uptime)
 {
-	int64_t uptime_prev = *uptime;
+	int64_t uptime_prev;
+
+	if (uptime == NULL) {
+		LOG_ERR("The passed in pointer cannot be NULL");
+		return -EINVAL;
+	}
+
+	uptime_prev = *uptime;
 
 	if (!initial_valid_time) {
 		LOG_WRN("Valid time not currently available");
@@ -400,7 +426,14 @@ int date_time_uptime_to_unix_time_ms(int64_t *uptime)
 int date_time_now(int64_t *unix_time_ms)
 {
 	int err;
-	int64_t unix_time_ms_prev = *unix_time_ms;
+	int64_t unix_time_ms_prev;
+
+	if (unix_time_ms == NULL) {
+		LOG_ERR("The passed in pointer cannot be NULL");
+		return -EINVAL;
+	}
+
+	unix_time_ms_prev = *unix_time_ms;
 
 	*unix_time_ms = k_uptime_get();
 
@@ -413,12 +446,17 @@ int date_time_now(int64_t *unix_time_ms)
 	return err;
 }
 
+bool date_time_is_valid(void)
+{
+	return initial_valid_time;
+}
+
 void date_time_register_handler(date_time_evt_handler_t evt_handler)
 {
 	if (evt_handler == NULL) {
 		app_evt_handler = NULL;
 
-		LOG_INF("Previously registered handler %p de-registered",
+		LOG_DBG("Previously registered handler %p de-registered",
 			app_evt_handler);
 
 		return;
@@ -454,6 +492,7 @@ int date_time_clear(void)
 int date_time_timestamp_clear(int64_t *unix_timestamp)
 {
 	if (unix_timestamp == NULL) {
+		LOG_ERR("The passed in pointer cannot be NULL");
 		return -EINVAL;
 	}
 
@@ -462,6 +501,4 @@ int date_time_timestamp_clear(int64_t *unix_timestamp)
 	return 0;
 }
 
-DEVICE_INIT(date_time, "DATE_TIME",
-	    date_time_init, NULL, NULL, APPLICATION,
-	    CONFIG_APPLICATION_INIT_PRIORITY);
+SYS_INIT(date_time_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

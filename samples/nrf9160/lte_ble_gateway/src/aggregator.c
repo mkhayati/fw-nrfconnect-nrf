@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include "aggregator.h"
 #include <kernel.h>
@@ -17,7 +17,7 @@ static uint32_t entry_count;
 
 struct fifo_entry {
 	void *fifo_reserved;
-	uint8_t data[ENTRY_MAX_SIZE];
+	uint8_t data[sizeof(struct sensor_data)];
 };
 
 int aggregator_put(struct sensor_data in_data)

@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2020 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menuconfig ZIGBEE
@@ -9,16 +9,19 @@ menuconfig ZIGBEE
 	imply FPU
 	select APP_LINK_WITH_ZBOSS
 	select PM_SINGLE_IMAGE
+	select NET_L2_ZIGBEE
+	select NETWORKING
+	select NET_PKT_TXTIME
+	imply MPSL
 	imply COUNTER
-	imply COUNTER_TIMER3
-	imply NRF_802154_RADIO_DRIVER
+	imply COUNTER_TIMER2
 	imply ENTROPY_GENERATOR
 	imply POLL
 	imply FLASH
 	imply FLASH_PAGE_LAYOUT
 	imply FLASH_MAP
 	imply MPU_ALLOW_FLASH_WRITE
-	depends on (SOC_NRF52840 || SOC_NRF52833)
+	depends on (SOC_NRF52840 || SOC_NRF52833 || SOC_NRF5340_CPUAPP)
 
 if ZIGBEE
 
@@ -95,13 +98,6 @@ config ZIGBEE_APP_CB_QUEUE_LENGTH
 	  Elements from this queue are flushed right after ZBOSS context awakes,
 	  before the actual callback execution.
 
-config ZIGBEE_VENDOR_OUI
-	hex "A value that represents MAC Address Block Large"
-	default 0xf4ce36
-	help
-	  A value that represents MAC Address Block Large (MA-L, formerly called Organizationally Unique Identifier, or OUI), a part of the device's EUI-64 address.
-	  By default, use Nordic Semiconductor's MA-L block (f4-ce-36), assigned by the IEEE Registration Authority.
-
 config ZIGBEE_DEBUG_FUNCTIONS
 	bool "Include Zigbee debug functions"
 	help
@@ -122,12 +118,6 @@ config ZIGBEE_ERROR_TO_STRING_ENABLED
 	default y
 	help
 	  Include functions for mapping ZBOSS errors to string.
-
-config ZIGBEE_SHELL_LOG_ENABLED
-	bool "Include functions for Zigbee Shell logging"
-	default y
-	help
-	  Include functions for Zigbee Shell logging.
 
 # Configure ZBOSS_TRACE_LOG_LEVEL
 choice
@@ -166,28 +156,50 @@ config ZBOSS_TRACE_LOG_LEVEL
 config ZBOSS_TRACE_MASK
 	hex "Trace mask of ZBOSS stack logs"
 	default 0x0000
-	range 0x0000 0x0B5C
+	range 0x00000000 0xFFFFFFFF
 	help
 	  Selectively enable Zigbee binary trace logs.
-	  The mask value should be a bitwise OR of values assigned to selected modules.
+	  The mask value is expected to be a bitwise OR of values assigned to selected modules.
 
-	  Available modules are:
+	  Available modules:
 
-	  - 0x4000 Zigbee Green Power
-	  - 0x0800 Application
-	  - 0x0200 Zigbee Light Link
-	  - 0x0100 Zigbee Cluster Library
-	  - 0x0080 Security
-	  - 0x0040 Zigbee Device Object
-	  - 0x0010 Application Support layer
-	  - 0x0008 Network layer
-	  - 0x0004 MAC layer
-	  - 0x0002 Memory management
-	  - 0x0001 Common
+	  - 0x04000000 Reserved
+	  - 0x02000000 Reserved
+	  - 0x01000000 Reserved
+	  - 0x00800000 Reserved
+	  - 0x00400000 Reserved
+	  - 0x00200000 Zigbee NCP: transport (LL)
+	  - 0x00100000 Zigbee NCP: command adapters (HL)
+	  - 0x00080000 ZCL: Firmware over-the-air upgrade
+	  - 0x00040000 IAS zone device: battery monitoring
+	  - 0x00020000 Reserved
+	  - 0x00010000 MAC lower layer
+	  - 0x00008000 MAC layer API calls
+	  - 0x00004000 Zigbee Green Power
+	  - 0x00002000 Custom components
+	  - 0x00001000 Reserved
+	  - 0x00000800 Application
+	  - 0x00000400 Reserved
+	  - 0x00000200 Zigbee Light Link
+	  - 0x00000100 Zigbee Cluster Library
+	  - 0x00000080 Security
+	  - 0x00000040 Zigbee Device Object
+	  - 0x00000020 Zigbee Smart Energy
+	  - 0x00000010 Application support layer
+	  - 0x00000008 Network layer
+	  - 0x00000004 MAC layer
+	  - 0x00000002 Memory management
+	  - 0x00000001 Common
 
-	  For example, in order to enable traces related to OTA DFU, one should set this option to 0x4100.
+	  For example, to enable traces related to OTA DFU, set this option to 0x00080100.
 
-	  Note: For general debugging purposes, please use 0x0C48.
+	  Note: For general debugging purposes, use 0x00000C48.
+
+config ZBOSS_TRAF_DUMP
+	bool "Enable logging received 802.15.4 frames over ZBOSS traces"
+	depends on !ZBOSS_TRACE_LOG_LEVEL_OFF
+	help
+	  Dumps all packets destined to the node over ZBOSS binary trace protocol
 
 # Configure ZIGBEE_SHELL_LOG_LEVEL
 module = ZIGBEE_SHELL
@@ -197,11 +209,6 @@ source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
 # Configure ZBOSS_OSIF_LOG_LEVEL
 module = ZBOSS_OSIF
 module-str = ZBOSS osif layer
-source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
-
-# Configure ZIGBEE_HELPERS_LOG_LEVEL
-module = ZIGBEE_HELPERS
-module-str = Zigbee helper routines
 source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
 
 endmenu #menu "Zigbee Log configuration"
@@ -246,6 +253,10 @@ config ZIGBEE_UART_TX_BUF_LEN
 
 endif #ZIGBEE_HAVE_SERIAL
 
+config ZIGBEE_USE_SOFTWARE_AES
+	bool "Use software based AES"
+	select TINYCRYPT
+	default n
 
 config ZIGBEE_USE_LEDS
 	bool "LEDs abstract for ZBOSS OSIF"
@@ -272,6 +283,7 @@ if ZIGBEE_SHELL
 config ZIGBEE_SHELL_DEBUG_CMD
 	bool "Enable debug shell commands"
 	select ZIGBEE_DEBUG_FUNCTIONS
+	imply ZIGBEE_LOGGER_EP
 	help
 	  This option enables:
 
@@ -294,12 +306,6 @@ config ZIGBEE_SHELL_CTX_MGR_ENTRIES_NBR
 	  Entries are shared by ZDO commands, ZCL commands and PING commands.
 
 endif #ZIGBEE_SHELL
-
-config RADIO_STATISTICS
-	bool "Collect radio statistics"
-	default n
-	help
-	  This option enables the radio statistics.
 
 endmenu #menu "ZBOSS osif configuration"
 

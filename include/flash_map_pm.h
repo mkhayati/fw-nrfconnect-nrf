@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef FLASH_MAP_PM_H_
@@ -30,6 +30,9 @@
 #endif
 
 #define PM_ID(label) PM_##label##_ID
+#define PM_IS_ENABLED(label) PM_##label##_IS_ENABLED
+
+#define FLASH_AREA_LABEL_STR(label) #label
 
 #define FLASH_AREA_ID(label) PM_ID(label)
 
@@ -40,6 +43,6 @@
 	UTIL_CAT(PM_, UTIL_CAT(UTIL_CAT(PM_, UTIL_CAT(PM_ID(label), _LABEL)), _SIZE))
 
 #define FLASH_AREA_LABEL_EXISTS(label) \
-	IS_ENABLED(FLASH_AREA_SIZE(label))
+	IS_ENABLED(PM_IS_ENABLED(label))
 
 #endif /* FLASH_MAP_PM_H_*/

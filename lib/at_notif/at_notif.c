@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <logging/log.h>
@@ -118,7 +118,7 @@ static void notif_dispatch(const char *response)
 	k_mutex_unlock(&list_mtx);
 }
 
-static int module_init(struct device *dev)
+static int module_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 

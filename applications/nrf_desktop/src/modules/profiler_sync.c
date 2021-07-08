@@ -1,17 +1,17 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
 #include <drivers/gpio.h>
 #include <profiler.h>
 
-#include "gpio_pins.h"
+#include <caf/gpio_pins.h>
 
 #define MODULE profiler_sync
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_PROFILER_SYNC_LOG_LEVEL);
@@ -22,10 +22,10 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_PROFILER_SYNC_LOG_LEVEL);
 
 #define SYNC_EVENT_NAME		"sync_event"
 
-static struct device *gpio_dev;
+static const struct device *gpio_dev;
 static struct gpio_callback gpio_cb;
 
-static struct k_delayed_work gen_sync_event;
+static struct k_work_delayable gen_sync_event;
 static uint16_t sync_event_id;
 static int pin_value;
 
@@ -44,7 +44,7 @@ static void register_sync_event(void)
 						     NULL, 0);
 }
 
-static void gen_sync_event_isr(struct device *gpio_dev,
+static void gen_sync_event_isr(const struct device *gpio_dev,
 			       struct gpio_callback *cb,
 			       uint32_t pins)
 {
@@ -70,7 +70,7 @@ static void gen_sync_event_fn(struct k_work *work)
 		module_set_state(MODULE_STATE_ERROR);
 	} else {
 		profile_sync_event();
-		k_delayed_work_submit(&gen_sync_event,
+		k_work_reschedule(&gen_sync_event,
 				      K_MSEC(sync_period));
 	}
 }
@@ -106,8 +106,8 @@ static int init(void)
 		}
 
 		if (!err) {
-			k_delayed_work_init(&gen_sync_event, gen_sync_event_fn);
-			k_delayed_work_submit(&gen_sync_event,
+			k_work_init_delayable(&gen_sync_event, gen_sync_event_fn);
+			k_work_reschedule(&gen_sync_event,
 					      K_MSEC(SYNC_PERIOD_MIN));
 		}
 	} else {

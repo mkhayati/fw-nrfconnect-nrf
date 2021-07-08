@@ -3,6 +3,10 @@
 Azure FOTA
 ##########
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Azure firmware over-the-air (Azure FOTA) library provides a way to parse `Azure IoT Hub device twin messages`_ to obtain firmware upgrade information and perform FOTA downloads.
 This library is used by the :ref:`azure_fota_sample` sample.
 
@@ -39,7 +43,7 @@ Below are the maximum total fragment sizes in different scenarios:
 
 ``fwFragmentSize`` should therefore be set to a value lower than the maximum buffer size to reserve space for the HTTP header.
 
-It is up to the application that uses the library to restart the device when the FOTA completes and an :cpp:enumerator:`AZURE_FOTA_EVT_DONE <azure_fota::AZURE_FOTA_EVT_DONE>` event is received.
+It is up to the application that uses the library to restart the device when the FOTA completes and an :c:enumerator:`AZURE_FOTA_EVT_DONE` event is received.
 
 .. note::
    The current implementation is experimental and may be enhanced in future releases.

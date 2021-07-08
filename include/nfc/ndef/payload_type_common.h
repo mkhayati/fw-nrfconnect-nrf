@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef NFC_NDEF_PAYLOAD_TYPE_COMMON_H_
@@ -10,7 +10,7 @@
 /**@file
  *
  * @defgroup nfc_ndef_payload_type_common Standard NDEF Record Type definitions
- *
+ * @{
  * @brief    Set of standard NDEF Record Types defined in NFC Forum
  *           specifications.
  *

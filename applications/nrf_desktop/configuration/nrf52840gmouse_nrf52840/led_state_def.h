@@ -1,11 +1,11 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include "led_state.h"
-#include "led_effect.h"
+#include <caf/led_effect.h>
 
 /* This configuration file is included only once from led_state module and holds
  * information about LED effect associated with each state.

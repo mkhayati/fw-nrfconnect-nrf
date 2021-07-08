@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <console/console.h>
@@ -9,13 +9,18 @@
 #include <sys/printk.h>
 #include <zephyr/types.h>
 
+#if defined(CONFIG_USB)
+#include <usb/usb_device.h>
+#include <drivers/uart.h>
+#endif
+
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/conn.h>
 #include <bluetooth/gatt.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/uuid.h>
 #include <bluetooth/services/latency.h>
-#include <bluetooth/services/latency_c.h>
+#include <bluetooth/services/latency_client.h>
 #include <bluetooth/scan.h>
 #include <bluetooth/gatt_dm.h>
 #include <sdc_hci_vs.h>
@@ -29,15 +34,15 @@
 
 static volatile bool test_ready;
 static struct bt_conn *default_conn;
-static struct bt_gatt_latency gatt_latency;
-static struct bt_gatt_latency_c gatt_latency_client;
+static struct bt_latency latency;
+static struct bt_latency_client latency_client;
 static struct bt_le_conn_param *conn_param =
 	BT_LE_CONN_PARAM(INTERVAL_MIN, INTERVAL_MAX, 0, 400);
 static struct bt_conn_info conn_info = {0};
 
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-	BT_DATA_BYTES(BT_DATA_UUID128_ALL, LATENCY_UUID),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_LATENCY_VAL),
 };
 
 static const struct bt_data sd[] = {
@@ -113,12 +118,12 @@ static void scan_init(void)
 
 static void discovery_complete(struct bt_gatt_dm *dm, void *context)
 {
-	struct bt_gatt_latency_c *latency = context;
+	struct bt_latency_client *latency = context;
 
 	printk("Service discovery completed\n");
 
 	bt_gatt_dm_data_print(dm);
-	bt_gatt_latency_c_handles_assign(dm, latency);
+	bt_latency_handles_assign(dm, latency);
 	bt_gatt_dm_data_release(dm);
 
 	/* Start testing when the GATT service is discovered */
@@ -187,7 +192,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	bt_scan_stop();
 
 	err = bt_gatt_dm_start(default_conn, BT_UUID_LATENCY, &discovery_cb,
-			       &gatt_latency_client);
+			       &latency_client);
 	if (err) {
 		printk("Discover failed (err %d)\n", err);
 	}
@@ -342,7 +347,7 @@ static void latency_response_handler(const void *buf, uint16_t len)
 	}
 }
 
-static const struct bt_gatt_latency_c_cb latency_client_cb = {
+static const struct bt_latency_client_cb latency_client_cb = {
 	.latency_response = latency_response_handler
 };
 
@@ -375,8 +380,7 @@ static void test_run(void)
 	while (default_conn) {
 		uint32_t time = k_cycle_get_32();
 
-		err = bt_gatt_latency_c_request(&gatt_latency_client, &time,
-						sizeof(time));
+		err = bt_latency_request(&latency_client, &time, sizeof(time));
 		if (err && err != -EALREADY) {
 			printk("Latency failed (err %d)\n", err);
 		}
@@ -404,9 +408,25 @@ void main(void)
 		.le_param_updated = le_param_updated,
 	};
 
-	printk("Starting Bluetooth LLPM example\n");
+#if defined(CONFIG_USB)
+	const struct device *uart_dev = device_get_binding(
+			CONFIG_UART_CONSOLE_ON_DEV_NAME);
+	uint32_t dtr = 0;
+
+	if (usb_enable(NULL)) {
+		return;
+	}
+
+	/* Poll if the DTR flag was set, optional */
+	while (!dtr) {
+		uart_line_ctrl_get(uart_dev, UART_LINE_CTRL_DTR, &dtr);
+		k_msleep(100);
+	}
+#endif
 
 	console_init();
+
+	printk("Starting Bluetooth LLPM example\n");
 
 	bt_conn_cb_register(&conn_callbacks);
 
@@ -420,13 +440,13 @@ void main(void)
 
 	scan_init();
 
-	err = bt_gatt_latency_init(&gatt_latency, NULL);
+	err = bt_latency_init(&latency, NULL);
 	if (err) {
 		printk("Latency service initialization failed (err %d)\n", err);
 		return;
 	}
 
-	err = bt_gatt_latency_c_init(&gatt_latency_client, &latency_client_cb);
+	err = bt_latency_client_init(&latency_client, &latency_client_cb);
 	if (err) {
 		printk("Latency client initialization failed (err %d)\n", err);
 		return;

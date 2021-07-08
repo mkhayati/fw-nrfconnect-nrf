@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <soc.h>
@@ -24,7 +24,7 @@ static const struct pin_state port0_on[] = {
 	{6,  0}, /* battery monitor enable */
 #endif
 
-#if !defined(CONFIG_DESKTOP_LED_ENABLE)
+#if !defined(CONFIG_CAF_LEDS)
 	{23, 0}, /* Front LED red */
 	{25, 0}, /* Front LED green */
 	{7,  0}, /* Front LED blue */
@@ -42,7 +42,7 @@ static const struct pin_state port1_on[] = {
 	{5,  0}, /* LED3 */
 	{7,  0}, /* LED3 */
 
-#if defined(CONFIG_DESKTOP_LED_ENABLE)
+#if defined(CONFIG_CAF_LEDS)
 	{13, 1}, /* LED power enable */
 #else
 	{13, 0}, /* LED power enable */

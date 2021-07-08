@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _CONFIG_CHANNEL_TRANSPORT_H_
@@ -53,7 +53,7 @@ enum config_channel_transport_state {
 
 /** @brief Configuration channel transport. */
 struct config_channel_transport {
-	struct k_delayed_work timeout;
+	struct k_work_delayable timeout;
 	size_t data_len;
 	uint16_t transport_id;
 	uint8_t data[REPORT_SIZE_USER_CONFIG];

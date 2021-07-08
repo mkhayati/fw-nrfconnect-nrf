@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**@file download_client.h
@@ -43,6 +43,7 @@ enum download_client_evt_id {
 	 *
 	 * Error reason may be one of the following:
 	 * - ECONNRESET: socket error, peer closed connection
+	 * - ETIMEDOUT: socket error, connection timed out
 	 * - EHOSTDOWN: host went down during download
 	 * - EBADMSG: HTTP response header not as expected
 	 * - E2BIG: HTTP response header could not fit in buffer
@@ -93,12 +94,20 @@ struct download_client_cfg {
 	/** Access point name identifying a packet data network.
 	 *  Pass a null-terminated string with the APN
 	 *  or NULL to use the default APN.
+	 *  @deprecated Specify a PDN ID instead.
 	 */
 	const char *apn;
+	/**
+	 * PDN ID to be used for the download.
+	 * Zero is the default PDN.
+	 */
+	uint8_t pdn_id;
 	/** Maximum fragment size to download. 0 indicates that Kconfigured
 	 *  values shall be used.
 	 */
 	size_t frag_size_override;
+	/** Set hostname for TLS Server Name Indication extension */
+	bool set_tls_hostname;
 };
 
 /**
@@ -161,7 +170,7 @@ struct download_client {
 	k_tid_t tid;
 	/** Internal download thread. */
 	struct k_thread thread;
-	/** Internal thread stack. */
+	/* Internal thread stack. */
 	K_THREAD_STACK_MEMBER(thread_stack,
 			      CONFIG_DOWNLOAD_CLIENT_STACK_SIZE);
 
@@ -198,8 +207,8 @@ int download_client_connect(struct download_client *client, const char *host,
  * @brief Download a file.
  *
  * The download is carried out in fragments of up to
- * @c CONFIG_DOWNLOAD_CLIENT_HTTP_FRAG_SIZE bytes for HTTP, or
- * @c CONFIG_DOWNLOAD_CLIENT_COAP_BLOCK_SIZE bytes for CoAP,
+ * @option{CONFIG_DOWNLOAD_CLIENT_HTTP_FRAG_SIZE} bytes for HTTP, or
+ * @option{CONFIG_DOWNLOAD_CLIENT_COAP_BLOCK_SIZE} bytes for CoAP,
  * which are delivered to the application
  * via @ref DOWNLOAD_CLIENT_EVT_FRAGMENT events.
  *

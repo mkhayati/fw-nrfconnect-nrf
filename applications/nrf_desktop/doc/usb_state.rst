@@ -3,6 +3,10 @@
 USB state module
 ################
 
+.. contents::
+   :local:
+   :depth: 2
+
 The |usb_state| is responsible for tracking the USB connection.
 It is also responsible for transmitting data through USB on the application's device.
 
@@ -19,7 +23,7 @@ Module events
 Configuration
 *************
 
-The module is enabled by selecting ``CONFIG_DESKTOP_USB_ENABLE``.
+The module is enabled by selecting :option:`CONFIG_DESKTOP_USB_ENABLE`.
 It depends on :option:`CONFIG_USB_DEVICE_HID`.
 
 When enabling the USB support for the device, set the following generic device options:
@@ -29,11 +33,7 @@ When enabling the USB support for the device, set the following generic device o
 * :option:`CONFIG_USB_DEVICE_VID` - Vendor ID (VID) number.
 * :option:`CONFIG_USB_DEVICE_PID` - Product ID (PID) number.
 
-Additionally, you can also configure the following options:
-
-.. contents::
-    :local:
-    :depth: 1
+Additionally, you can also configure the options described in the following sections.
 
 Low latency device configuration
 ================================

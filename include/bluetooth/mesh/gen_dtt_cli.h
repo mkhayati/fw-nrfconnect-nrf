@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -33,9 +33,6 @@ struct bt_mesh_dtt_cli;
  */
 #define BT_MESH_DTT_CLI_INIT(_status_handler)                                  \
 	{                                                                      \
-		.pub = { .msg = NET_BUF_SIMPLE(BT_MESH_MODEL_BUF_LEN(          \
-				 BT_MESH_DTT_OP_SET,                           \
-				 BT_MESH_DTT_MSG_LEN_SET)) },                  \
 		.status_handler = _status_handler,                             \
 	}
 
@@ -62,16 +59,22 @@ struct bt_mesh_dtt_cli {
 	 *
 	 * @param[in] cli Client that received the message.
 	 * @param[in] ctx Message context.
-	 * @param[in] transition_time Transition time presented in the message.
+	 * @param[in] transition_time Transition time presented in the message,
+	 *                            in milliseconds.
 	 */
 	void (*const status_handler)(struct bt_mesh_dtt_cli *cli,
 				     struct bt_mesh_msg_ctx *ctx,
 				     int32_t transition_time);
 
 	/** Response context for tracking acknowledged messages. */
-	struct bt_mesh_model_ack_ctx ack_ctx;
+	struct bt_mesh_msg_ack_ctx ack_ctx;
 	/** Model publish parameters. */
 	struct bt_mesh_model_pub pub;
+	/* Publication buffer */
+	struct net_buf_simple pub_buf;
+	/* Publication data */
+	uint8_t pub_data[BT_MESH_MODEL_BUF_LEN(BT_MESH_DTT_OP_SET,
+					       BT_MESH_DTT_MSG_LEN_SET)];
 	/** Composition data model entry pointer. */
 	struct bt_mesh_model *model;
 };
@@ -85,9 +88,10 @@ struct bt_mesh_dtt_cli {
  * @param[in] cli Client making the request.
  * @param[in] ctx Message context to use for sending, or NULL to publish with
  * the configured parameters.
- * @param[out] rsp_transition_time Pointer to a response buffer, or NULL to keep
- * from blocking. Note that the response is a signed value, that can be
- * K_FOREVER if the current state is unknown or too large to represent.
+ * @param[out] rsp_transition_time Pointer to a response buffer, or NULL to
+ * keep from blocking. The response denotes the configured transition time in
+ * milliseconds. Can be @em SYS_FOREVER_MS if the current state is unknown or
+ * too large to represent.
  *
  * @retval 0 Successfully retrieved the status of the bound srv.
  * @retval -EALREADY A blocking operation is already in progress in this model.
@@ -107,9 +111,10 @@ int bt_mesh_dtt_get(struct bt_mesh_dtt_cli *cli, struct bt_mesh_msg_ctx *ctx,
  * the configured parameters.
  * @param[in] transition_time Transition time to set (in milliseconds). Must be
  * less than @ref BT_MESH_MODEL_TRANSITION_TIME_MAX_MS.
- * @param[out] rsp_transition_time Response buffer, or NULL to keep from
- * blocking. Note that the response is a signed value, that can be K_FOREVER if
- * the current state is unknown or too large to represent.
+ * @param[out] rsp_transition_time Pointer to a response buffer, or NULL to
+ * keep from blocking. The response denotes the configured transition time in
+ * milliseconds. Can be @em SYS_FOREVER_MS if the current state is unknown or
+ * too large to represent.
  *
  * @retval 0 Successfully sent the message and populated the
  * @p rsp_transition_time buffer.
@@ -131,8 +136,6 @@ int bt_mesh_dtt_set(struct bt_mesh_dtt_cli *cli, struct bt_mesh_msg_ctx *ctx,
  *
  * @retval 0 Successfully sent the message.
  * @retval -EINVAL The given transition time is invalid.
- * @retval -ENOTSUP A message context was not provided and publishing is not
- * supported.
  * @retval -EADDRNOTAVAIL A message context was not provided and publishing is
  * not configured.
  * @retval -EAGAIN The device has not been provisioned.

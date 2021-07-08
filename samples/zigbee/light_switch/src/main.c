@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -16,21 +16,21 @@
 
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
-#include <zigbee_helpers.h>
-#include <zb_error_handler.h>
+#include <zigbee/zigbee_app_utils.h>
+#include <zigbee/zigbee_error_handler.h>
 #include <zb_nrf_platform.h>
 #include "zb_mem_config_custom.h"
 
 #if CONFIG_ZIGBEE_FOTA
 #include <zigbee/zigbee_fota.h>
-#include <power/reboot.h>
+#include <sys/reboot.h>
 #include <dfu/mcuboot.h>
 
 /* LED indicating OTA Client Activity. */
 #define OTA_ACTIVITY_LED          DK_LED2
 #endif /* CONFIG_ZIGBEE_FOTA */
 
-#if CONFIG_BT_GATT_NUS
+#if CONFIG_BT_NUS
 #include "nus_cmd.h"
 
 /* LED which indicates that Central is connected. */
@@ -45,7 +45,7 @@
 #define COMMAND_INCREASE          "i"
 /**< UART command that will decrease brightness of found light bulb(s). */
 #define COMMAND_DECREASE          "d"
-#endif /* CONFIG_BT_GATT_NUS */
+#endif /* CONFIG_BT_NUS */
 
 /* Source endpoint used to control light bulb. */
 #define LIGHT_SWITCH_ENDPOINT      1
@@ -476,7 +476,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 }
 
-#if CONFIG_BT_GATT_NUS
+#if CONFIG_BT_NUS
 
 static void turn_on_cmd(struct k_work *item)
 {
@@ -534,7 +534,7 @@ static struct nus_entry commands[] = {
 	NUS_COMMAND(NULL, NULL),
 };
 
-#endif /* CONFIG_BT_GATT_NUS */
+#endif /* CONFIG_BT_NUS */
 
 void main(void)
 {
@@ -583,10 +583,10 @@ void main(void)
 	/* Start Zigbee default thread. */
 	zigbee_enable();
 
-#if CONFIG_BT_GATT_NUS
+#if CONFIG_BT_NUS
 	/* Initalize NUS command service. */
 	nus_cmd_init(on_nus_connect, on_nus_disconnect, commands);
-#endif /* CONFIG_BT_GATT_NUS */
+#endif /* CONFIG_BT_NUS */
 
 	LOG_INF("ZBOSS Light Switch example started");
 

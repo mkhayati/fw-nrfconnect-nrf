@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2018 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menu "Application sample"
@@ -12,6 +12,30 @@ config APP_LWM2M_SERVER
 	string "LwM2M server name or IP address"
 	help
 	  Choose the LwM2M server you wish to connect to.
+
+config APP_LWM2M_PSK
+	string "LwM2M pre-shared key for communication"
+	default "000102030405060708090a0b0c0d0e0f"
+	help
+	  Pre-shared key used for communicationg with the server
+
+config APP_SERVER_TLS_TAG
+	int "LwM2M server TLS tag"
+	default 35724861
+
+config APP_BOOTSTRAP_TLS_TAG
+	int "LwM2M bootstrap server TLS tag"
+	default 35724862
+
+menu "Device info"
+config APP_MANUFACTURER
+	string "Board manufacturer"
+	default	"Nordic Semiconductor ASA"
+
+config APP_DEVICE_TYPE
+	string "Device type"
+	default	"OMA-LWM2M Client"
+endmenu
 
 config APP_HOLD_TIME_RSRP
 	int "Minimum time [s] between RSRP notification messages"
@@ -26,6 +50,13 @@ config APP_HOLD_TIME_GPS
 	help
 	  The minimum time in seconds that notifications can be sent to
 	  observers of the Location data.
+
+config APP_MCUBOOT_FLASH_BUF_SZ
+	int "Size of buffer used for flash write operations during MCUboot updates"
+	depends on DFU_TARGET_MCUBOOT
+	default 512
+	help
+	  Buffer size must be aligned to the minimal flash write block size.
 
 choice
 	prompt "GPS device"
@@ -80,7 +111,6 @@ config ACCEL_USE_SIM
 	select SENSOR
 	select SENSOR_SIM
 	select SENSOR_SIM_TRIGGER
-	select SENSOR_SIM_STATIC_VALUES
 	help
 		Use sensor simulator to generate accelerometer data for
 		flip detection data sent to nRF Cloud.

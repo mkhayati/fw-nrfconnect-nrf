@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <errno.h>
 #include <init.h>
@@ -296,7 +296,7 @@ static void err_handler(const struct nrf_rpc_err_report *report)
 }
 
 
-static int serialization_init(struct device *dev)
+static int serialization_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 

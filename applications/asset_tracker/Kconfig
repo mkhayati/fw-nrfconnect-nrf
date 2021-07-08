@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2018 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menu "Asset tracker"
@@ -131,6 +131,17 @@ config GPS_START_ON_MOTION
 	  position, but if no movement, wait a longer delay between updates
 	  to conserve power.
 
+if NRF_CLOUD_PGPS
+
+config PGPS_STORE_LOCATION
+	bool "Store location when GPS fix occurs"
+	help
+	  For semi-stationary applications, the first fix after reset will
+	  be faster using predicted GPS if the last known location is provided
+	  to the modem.
+
+endif
+
 endmenu # GPS
 
 menu "Device and modem"
@@ -153,7 +164,14 @@ endif
 
 endmenu # Device
 
-menu "Motion"
+menuconfig MOTION
+	bool "Enable motion sensing in Asset Tracker"
+	default y
+	help
+	  Enables motion sensing in asset tracker with real
+	  sensors or simulated ones.
+
+if MOTION
 
 choice
 	prompt "Accelerometer device"
@@ -166,7 +184,6 @@ config ACCEL_USE_SIM
 	select SENSOR
 	select SENSOR_SIM
 	select SENSOR_SIM_TRIGGER
-	select SENSOR_SIM_STATIC_VALUES
 	help
 	  Use sensor simulator to generate accelerometer data for
 	  flip detection data sent to nRF Cloud.
@@ -220,7 +237,7 @@ config ACCEL_INVERTED
 	  Enable if the accelerometer is mounted with the top side facing
 	  down when the board itself is in normal position.
 
-endmenu # Motion
+endif # MOTION
 
 menu "Cloud"
 
@@ -270,25 +287,47 @@ config CLOUD_WAIT_DURATION
 
 config CLOUD_FOTA_APP
 	bool "Enable firmware over-the-air upgrades for application"
-	depends on AWS_FOTA
+	depends on AWS_FOTA || NRF_CLOUD_FOTA
 	depends on DFU_TARGET_MCUBOOT
 	default y
 
 config CLOUD_FOTA_MODEM
 	bool "Enable firmware over-the-air upgrades for modem"
-	depends on AWS_FOTA
-	depends on DFU_TARGET_MODEM
+	depends on AWS_FOTA || NRF_CLOUD_FOTA
+	depends on DFU_TARGET_MODEM_DELTA
+	default y
+
+config CLOUD_FOTA_BOOT
+	bool "Enable firmware over-the-air upgrades for bootloader"
+	depends on AWS_FOTA || NRF_CLOUD_FOTA
+	depends on DFU_TARGET_MCUBOOT
+	depends on SECURE_BOOT
 	default y
 
 config CLOUD_CONNECT_ERR_REBOOT_S
 	int "Seconds to wait before rebooting when a cloud connect error occurs"
 	default 300
 
+if NRF_CLOUD_CLIENT_ID_SRC_RUNTIME
+
+config CLOUD_RUNTIME_CLIENT_ID
+	string "Client ID used for cloud connection"
+	default "my_runtime_client_id"
+
+endif # NRF_CLOUD_CLIENT_ID_SRC_RUNTIME
+
 rsource "src/mqtt_cloud/Kconfig"
 
 endmenu # Cloud
 
-menu "Environment sensors"
+menuconfig ENVIRONMENT_SENSORS
+	bool "Enable environment sensing in Asset Tracker"
+	default y
+	help
+	  Enables environment sensing in asset tracker with real
+	  sensors or simulated ones.
+
+if ENVIRONMENT_SENSORS
 
 config USE_BME680_BSEC
 	bool "Use Bosch BME680 BSEC lib"
@@ -374,7 +413,7 @@ config TEMP_DEV_NAME
 
 endif
 
-endmenu # Environment sensors
+endif # ENVIRONMENT_SENSORS
 
 menuconfig LIGHT_SENSOR
 	bool "Light sensor"

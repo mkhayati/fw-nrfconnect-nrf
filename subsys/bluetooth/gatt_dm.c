@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <inttypes.h>
@@ -650,6 +650,7 @@ int bt_gatt_dm_continue(struct bt_gatt_dm *dm, void *context)
 	if (err) {
 		LOG_ERR("Discover failed, error: %d.", err);
 		atomic_clear_bit(dm->state_flags, STATE_ATTRS_LOCKED);
+		discovery_complete_error(dm, err);
 	}
 
 	return err;

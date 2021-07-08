@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef SLM_UTIL_
@@ -16,9 +16,10 @@
 #include <zephyr/types.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <modem/at_cmd.h>
+#include <modem/at_cmd_parser.h>
 
 #define INVALID_SOCKET	-1
-#define INVALID_PORT	-1
 #define INVALID_SEC_TAG	-1
 #define INVALID_ROLE	-1
 
@@ -47,12 +48,22 @@ bool slm_util_cmd_casecmp(const char *cmd, const char *slm_cmd);
 /**
  * @brief Detect hexdecimal data type
  *
- * @param[in] hex Hex arrary to be encoded
- * @param[in] hex_len Length of hex array
+ * @param[in] data Hex arrary to be encoded
+ * @param[in] data_len Length of hex array
  *
  * @return true if the input is hexdecimal array, otherwise false
  */
-bool slm_util_hex_check(const uint8_t *hex, uint16_t hex_len);
+bool slm_util_hex_check(const uint8_t *data, uint16_t data_len);
+
+/**
+ * @brief Detect hexdecimal string data type
+ *
+ * @param[in] data Hexdecimal string arrary to be checked
+ * @param[in] data_len Length of array
+ *
+ * @return true if the input is hexdecimal string array, otherwise false
+ */
+bool slm_util_hexstr_check(const uint8_t *data, uint16_t data_len);
 
 /**
  * @brief Encode hex array to hexdecimal string (ASCII text)
@@ -91,6 +102,33 @@ int slm_util_atoh(const char *ascii, uint16_t ascii_len,
  * @return true if text string is IPv4 address, false otherwise
  */
 bool check_for_ipv4(const char *address, uint8_t length);
+
+/**brief use AT command to get IPv4 address
+ *
+ * @param[in] address buffer to hold the IPv4 address
+ *
+ * @return true if IPv4 address obtained, false otherwise
+ */
+bool util_get_ipv4_addr(char *address);
+
+/**
+ * @brief Get string value from AT command with length check.
+ *
+ * @p len must be bigger than the string length, or an error is returned.
+ * The copied string is null-terminated.
+ *
+ * @param[in]     list    Parameter list.
+ * @param[in]     index   Parameter index in the list.
+ * @param[out]    value   Pointer to the buffer where to copy the value.
+ * @param[in,out] len     Available space in @p value, returns actual length
+ *                        copied into string buffer in bytes, excluding the
+ *                        terminating null character.
+ *
+ * @retval 0 If the operation was successful.
+ *           Otherwise, a (negative) error code is returned.
+ */
+int util_string_get(const struct at_param_list *list, size_t index,
+			 char *value, size_t *len);
 
 /** @} */
 

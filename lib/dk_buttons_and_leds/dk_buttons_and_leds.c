@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -65,11 +65,11 @@ enum state {
 };
 
 static enum state state;
-static struct k_delayed_work buttons_scan;
+static struct k_work_delayable buttons_scan;
 static button_handler_t button_handler_cb;
 static atomic_t my_buttons;
-static struct device *button_devs[ARRAY_SIZE(button_pins)];
-static struct device *led_devs[ARRAY_SIZE(led_pins)];
+static const struct device *button_devs[ARRAY_SIZE(button_pins)];
+static const struct device *led_devs[ARRAY_SIZE(led_pins)];
 static struct gpio_callback gpio_cb;
 static struct k_spinlock lock;
 static sys_slist_t button_handlers;
@@ -158,12 +158,9 @@ static void buttons_scan_fn(struct k_work *work)
 	last_button_scan = button_scan;
 
 	if (button_scan != 0) {
-		int err = k_delayed_work_submit(&buttons_scan,
+		k_work_reschedule(&buttons_scan,
 		  K_MSEC(CONFIG_DK_LIBRARY_BUTTON_SCAN_INTERVAL));
 
-		if (err) {
-			LOG_ERR("Cannot add work to workqueue");
-		}
 	} else {
 		/* If no button is pressed module can switch to callbacks */
 		int err = 0;
@@ -211,7 +208,7 @@ int dk_leds_init(void)
 	return dk_set_leds_state(DK_NO_LEDS_MSK, DK_ALL_LEDS_MSK);
 }
 
-static void button_pressed(struct device *gpio_dev, struct gpio_callback *cb,
+static void button_pressed(const struct device *gpio_dev, struct gpio_callback *cb,
 		    uint32_t pins)
 {
 	k_spinlock_key_t key = k_spin_lock(&lock);
@@ -226,7 +223,7 @@ static void button_pressed(struct device *gpio_dev, struct gpio_callback *cb,
 	switch (state) {
 	case STATE_WAITING:
 		state = STATE_SCANNING;
-		k_delayed_work_submit(&buttons_scan, K_MSEC(1));
+		k_work_reschedule(&buttons_scan, K_MSEC(1));
 		break;
 
 	case STATE_SCANNING:
@@ -294,17 +291,15 @@ int dk_buttons_init(button_handler_t button_handler)
 		}
 	}
 
-	k_delayed_work_init(&buttons_scan, buttons_scan_fn);
+	k_work_init_delayable(&buttons_scan, buttons_scan_fn);
 
 	state = STATE_SCANNING;
 
-	err = k_delayed_work_submit(&buttons_scan, K_NO_WAIT);
-	if (err) {
-		LOG_ERR("Cannot add work to workqueue");
-		return err;
-	}
+	k_work_schedule(&buttons_scan, K_NO_WAIT);
 
 	dk_read_buttons(NULL, NULL);
+
+	atomic_set(&my_buttons, (atomic_val_t)get_buttons());
 
 	return 0;
 }
@@ -386,7 +381,7 @@ int dk_set_led(uint8_t led_idx, uint32_t val)
 {
 	int err;
 
-	if (led_idx > ARRAY_SIZE(led_pins)) {
+	if (led_idx >= ARRAY_SIZE(led_pins)) {
 		LOG_ERR("LED index out of the range");
 		return -EINVAL;
 	}

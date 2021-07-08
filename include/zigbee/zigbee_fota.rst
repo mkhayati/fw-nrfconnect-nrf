@@ -3,6 +3,10 @@
 Zigbee FOTA
 ###########
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Zigbee firmware over-the-air (Zigbee FOTA) library provides Zigbee endpoint definition, which implements clusters responsible for transferring a firmware file through the Zigbee network.
 The received data is passed as an upgrade candidate through the :ref:`lib_dfu_target` library API.
 
@@ -16,7 +20,7 @@ The library uses the endpoint to:
 When used, the Zigbee FOTA library replaces the :ref:`lib_fota_download` library in |NCS|.
 
 .. note::
-    The Zigbee FOTA functionality has been added to the :ref:`zigbee_light_switch_sample` sample.
+    The Zigbee FOTA functionality is available for the :ref:`zigbee_light_switch_sample` sample.
 
 OTA upgrade entities
 ********************
@@ -51,7 +55,7 @@ The library takes care of where the upgrade candidate is stored, depending on th
 When the download is completed, the download client sends an appropriate event.
 At this point, the received firmware is tagged as an upgrade candidate and the OTA server is queried for an update time.
 
-Once the OTA server triggers the update process, the library sends a :cpp:enumerator:`ZIGBEE_FOTA_EVT_FINISHED <zigbee_fota::ZIGBEE_FOTA_EVT_FINISHED>` callback event.
+Once the OTA server triggers the update process, the library sends a :c:enumerator:`ZIGBEE_FOTA_EVT_FINISHED` callback event.
 When the consumer of the library receives this event, it should issue a reboot command to apply the upgrade.
 
 .. _lib_zigbee_fota_options:
@@ -75,7 +79,7 @@ To configure the Zigbee FOTA library, use the following options:
 * :option:`CONFIG_ENABLE_ZIGBEE_FOTA_MAX_HW_VERSION`
 * :option:`CONFIG_ZIGBEE_FOTA_MAX_HW_VERSION`
 
-For detailed steps about configuring the Zigbee FOTA in a Zigbee sample or application, see :ref:`ug_zigbee_configuring_components_ota`.
+For detailed steps about configuring the library in a Zigbee sample or application, see :ref:`ug_zigbee_configuring_components_ota`.
 
 Limitations
 ***********
@@ -84,7 +88,7 @@ The Zigbee FOTA library has the following limitations:
 
 * The endpoint definition in the library includes the endpoint ID, defined with :option:`CONFIG_ZIGBEE_FOTA_ENDPOINT`.
   When using the Zigbee FOTA library, this endpoint ID cannot be used for other endpoints.
-* The Zigbee FOTA upgrades are currently only supported on the nRF52840 DK board (PCA10056).
+* The Zigbee FOTA upgrades are currently only supported on the nRF52840 DK (PCA10056).
 * The Zigbee FOTA library does not currently support bootloader upgrades.
 * In case of an MCU reset between the completion of the OTA image transfer and a postponed firmware upgrade, the upgrade will be applied immediately.
 

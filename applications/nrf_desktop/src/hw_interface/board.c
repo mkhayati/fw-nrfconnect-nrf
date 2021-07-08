@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -12,10 +12,10 @@
 #include "port_state.h"
 #include "port_state_def.h"
 
-#include "power_event.h"
+#include <caf/events/power_event.h>
 
 #define MODULE board
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_BOARD_LOG_LEVEL);
@@ -25,7 +25,7 @@ static int port_setup(const char *name,
 		      const struct pin_state pin_state[],
 		      size_t cnt)
 {
-	struct device *gpio_dev = device_get_binding(name);
+	const struct device *gpio_dev = device_get_binding(name);
 	int err = 0;
 
 	if (!gpio_dev) {

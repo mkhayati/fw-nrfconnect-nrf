@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <string.h>
@@ -52,11 +52,21 @@ int url_parse_host(const char *url, char *host, size_t len)
 
 	(void)swallow(&cur, "://");
 
-	end = strchr(cur, ':');
-	if (!end) {
-		end = strchr(cur, '/');
+	if (cur[0] == '[') {
+		/* literal IPv6 address */
+		end = strchr(cur, ']');
+
 		if (!end) {
-			end = url + strlen(url) + 1;
+			return -EINVAL;
+		}
+		++end;
+	} else {
+		end = strchr(cur, ':');
+		if (!end) {
+			end = strchr(cur, '/');
+			if (!end) {
+				end = url + strlen(url) + 1;
+			}
 		}
 	}
 
@@ -84,6 +94,11 @@ int url_parse_port(const char *url, uint16_t *port)
 
 	(void)swallow(&cur, "://");
 
+	if (cur[0] == '[') {
+		/* literal IPv6 address */
+		swallow(&cur, "]");
+	}
+
 	err = swallow(&cur, ":");
 	if (err) {
 		return -EINVAL;
@@ -96,7 +111,7 @@ int url_parse_port(const char *url, uint16_t *port)
 		len = end - cur;
 	}
 
-	len = MAX(len, sizeof(aport) - 1);
+	len = MIN(len, sizeof(aport) - 1);
 
 	memcpy(aport, cur, len);
 	aport[len] = '\0';

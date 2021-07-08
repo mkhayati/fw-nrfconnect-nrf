@@ -3,6 +3,10 @@
 |NCS| v1.0.0 Release Notes
 ##########################
 
+.. contents::
+   :local:
+   :depth: 2
+
 nRF Connect SDK delivers reference software and supporting libraries for developing low-power wireless applications with Nordic Semiconductor products. It includes the MCUboot and the Zephyr RTOS open source projects which are continuously integrated and re-distributed with the SDK.
 
 nRF Connect SDK v1.0.0 supports product development with the nRF9160 Cellular IoT device.
@@ -111,7 +115,7 @@ nRF9160
 BSD library
 -----------
 
-* Updated bsdlib to version 0.3.3.
+* Updated BSD library to version 0.3.3.
 * Introduced a new header :file:`bsdlib.h` to be used by the application to initialize and shut down the library.
 * Library initialization during system initialization (``SYS_INIT``) is now optional, and controlled via ``Kconfig``. The default behavior is unchanged.
 
@@ -172,12 +176,12 @@ Bluetooth Low Energy
 
 * Added the following samples:
 
-  * :ref:`central_bas` - demonstrates how do use the :ref:`bas_c_readme` to receive battery level information from a compatible device.
+  * :ref:`central_bas` - demonstrates how do use the :ref:`bas_client_readme` to receive battery level information from a compatible device.
   * :ref:`shell_bt_nus` - demonstrates how to use the :ref:`shell_bt_nus_readme` to receive shell commands from a remote device.
 
 * Added the following libraries:
 
-  * :ref:`bas_c_readme` - used to retrieve information about the battery level from a device.
+  * :ref:`bas_client_readme` - used to retrieve information about the battery level from a device.
   * :ref:`shell_bt_nus_readme` - allows for sending shell commands from a host to the application.
 
 * Added :ref:`ble_console_readme` - a desktop application that can be used to communicate with an nRF device over *Bluetooth* Low Energy using the :ref:`shell_bt_nus_readme`.
@@ -235,7 +239,7 @@ Documentation
 
   * Bluetooth Low Energy:
 
-    * :ref:`bas_c_readme`
+    * :ref:`bas_client_readme`
 
   * Other:
 
@@ -258,7 +262,7 @@ Known issues
 nRF9160
 =======
 
-* The :ref:`asset_tracker` sample does not wait for connection to nRF Cloud before trying to send data.
+* The :ref:`asset_tracker` sample does not wait for connection to nRF Connect for Cloud before trying to send data.
   This causes the sample to crash if the user toggles one of the switches before the board is connected to the cloud.
 * The :ref:`asset_tracker` sample might show up to 2.5 mA current consumption in idle mode with ``CONFIG_POWER_OPTIMIZATION_ENABLE=y``.
 * If a debugger (for example, J-Link) is connected via SWD to the nRF9160, the modem firmware will reset.

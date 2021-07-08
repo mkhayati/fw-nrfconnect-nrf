@@ -3,6 +3,10 @@
 CPU measurement module
 ######################
 
+.. contents::
+   :local:
+   :depth: 2
+
 Use the CPU measurement module to monitor CPU load.
 
 Module events
@@ -18,15 +22,15 @@ Module events
 Configuration
 *************
 
-Enable the module using the ``CONFIG_DESKTOP_CPU_MEAS_ENABLE`` Kconfig option.
+Enable the module using the :option:`CONFIG_DESKTOP_CPU_MEAS_ENABLE` Kconfig option.
 This Kconfig option selects the :option:`CONFIG_CPU_LOAD` option.
 The :option:`CONFIG_CPU_LOAD` option enables :ref:`cpu_load`, that is used to perform the measurements.
 
-Set the time between subsequent CPU load measurements, in milliseconds, using the ``CONFIG_DESKTOP_CPU_MEAS_PERIOD`` option.
+Set the time between subsequent CPU load measurements, in milliseconds, using the :option:`CONFIG_DESKTOP_CPU_MEAS_PERIOD` option.
 
 Implementation details
 **********************
 
-The module periodically submits the measured CPU load as ``cpu_load_event`` and resets the measurement.
+The module periodically submits the measured CPU load as :c:struct:`cpu_load_event` and resets the measurement.
 The event can be displayed in the logs or using the :ref:`profiler`.
-The :cpp:member:`load` presents the CPU load in 0,001% units.
+The :c:member:`cpu_load_event.load` presents the CPU load in 0,001% units.

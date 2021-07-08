@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -20,7 +20,7 @@
 #include <bluetooth/gatt.h>
 
 #include <bluetooth/services/nus.h>
-#include <bluetooth/services/nus_c.h>
+#include <bluetooth/services/nus_client.h>
 #include <bluetooth/gatt_dm.h>
 #include <bluetooth/scan.h>
 
@@ -43,8 +43,8 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define UART_WAIT_FOR_BUF_DELAY K_MSEC(50)
 #define UART_RX_TIMEOUT 50
 
-static struct device *uart;
-static struct k_delayed_work uart_work;
+static const struct device *uart;
+static struct k_work_delayable uart_work;
 
 K_SEM_DEFINE(nus_write_sem, 0, 1);
 
@@ -58,7 +58,7 @@ static K_FIFO_DEFINE(fifo_uart_tx_data);
 static K_FIFO_DEFINE(fifo_uart_rx_data);
 
 static struct bt_conn *default_conn;
-static struct bt_gatt_nus_c gatt_nus_c;
+static struct bt_nus_client nus_client;
 
 static void ble_data_sent(uint8_t err, const uint8_t *const data, uint16_t len)
 {
@@ -117,7 +117,7 @@ static uint8_t ble_data_received(const uint8_t *const data, uint16_t len)
 	return BT_GATT_ITER_CONTINUE;
 }
 
-static void uart_cb(struct device *dev, struct uart_event *evt, void *user_data)
+static void uart_cb(const struct device *dev, struct uart_event *evt, void *user_data)
 {
 	ARG_UNUSED(dev);
 
@@ -181,8 +181,7 @@ static void uart_cb(struct device *dev, struct uart_event *evt, void *user_data)
 			buf->len = 0;
 		} else {
 			LOG_WRN("Not able to allocate UART receive buffer");
-			k_delayed_work_submit(&uart_work,
-					      UART_WAIT_FOR_BUF_DELAY);
+			k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
 			return;
 		}
 
@@ -241,7 +240,7 @@ static void uart_work_handler(struct k_work *item)
 		buf->len = 0;
 	} else {
 		LOG_WRN("Not able to allocate UART receive buffer");
-		k_delayed_work_submit(&uart_work, UART_WAIT_FOR_BUF_DELAY);
+		k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
 		return;
 	}
 
@@ -266,7 +265,7 @@ static int uart_init(void)
 		return -ENOMEM;
 	}
 
-	k_delayed_work_init(&uart_work, uart_work_handler);
+	k_work_init_delayable(&uart_work, uart_work_handler);
 
 	err = uart_callback_set(uart, uart_cb, NULL);
 	if (err) {
@@ -280,13 +279,13 @@ static int uart_init(void)
 static void discovery_complete(struct bt_gatt_dm *dm,
 			       void *context)
 {
-	struct bt_gatt_nus_c *nus_c = context;
+	struct bt_nus_client *nus = context;
 	LOG_INF("Service discovery completed");
 
 	bt_gatt_dm_data_print(dm);
 
-	bt_gatt_nus_c_handles_assign(dm, nus_c);
-	bt_gatt_nus_c_tx_notif_enable(nus_c);
+	bt_nus_handles_assign(dm, nus);
+	bt_nus_subscribe_receive(nus);
 
 	bt_gatt_dm_data_release(dm);
 }
@@ -321,10 +320,19 @@ static void gatt_discover(struct bt_conn *conn)
 	err = bt_gatt_dm_start(conn,
 			       BT_UUID_NUS_SERVICE,
 			       &discovery_cb,
-			       &gatt_nus_c);
+			       &nus_client);
 	if (err) {
 		LOG_ERR("could not start the discovery procedure, error "
 			"code: %d", err);
+	}
+}
+
+static void exchange_func(struct bt_conn *conn, uint8_t err, struct bt_gatt_exchange_params *params)
+{
+	if (!err) {
+		LOG_INF("MTU exchange done");
+	} else {
+		LOG_WRN("MTU exchange failed (err %" PRIu8 ")", err);
 	}
 }
 
@@ -354,6 +362,14 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 	}
 
 	LOG_INF("Connected: %s", log_strdup(addr));
+
+	static struct bt_gatt_exchange_params exchange_params;
+
+	exchange_params.func = exchange_func;
+	err = bt_gatt_exchange_mtu(conn, &exchange_params);
+	if (err) {
+		LOG_WRN("MTU exchange failed (err %d)", err);
+	}
 
 	err = bt_conn_set_security(conn, BT_SECURITY_L2);
 	if (err) {
@@ -442,14 +458,14 @@ static void scan_connecting(struct bt_scan_device_info *device_info,
 static int nus_client_init(void)
 {
 	int err;
-	struct bt_gatt_nus_c_init_param nus_c_init_obj = {
-		.cbs = {
-			.data_received = ble_data_received,
-			.data_sent = ble_data_sent,
+	struct bt_nus_client_init_param init = {
+		.cb = {
+			.received = ble_data_received,
+			.sent = ble_data_sent,
 		}
 	};
 
-	err = bt_gatt_nus_c_init(&gatt_nus_c, &nus_c_init_obj);
+	err = bt_nus_client_init(&nus_client, &init);
 	if (err) {
 		LOG_ERR("NUS Client initialization failed (err %d)", err);
 		return err;
@@ -586,7 +602,7 @@ void main(void)
 		struct uart_data_t *buf = k_fifo_get(&fifo_uart_rx_data,
 						     K_FOREVER);
 
-		err = bt_gatt_nus_c_send(&gatt_nus_c, buf->data, buf->len);
+		err = bt_nus_client_send(&nus_client, buf->data, buf->len);
 		if (err) {
 			LOG_WRN("Failed to send data over BLE connection"
 				"(err %d)", err);

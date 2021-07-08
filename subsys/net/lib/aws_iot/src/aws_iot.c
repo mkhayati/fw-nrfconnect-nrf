@@ -1,15 +1,20 @@
+/*
+ * Copyright (c) 2020 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
 #include <net/aws_iot.h>
 #include <net/mqtt.h>
 #include <net/socket.h>
 #include <net/cloud.h>
-#include <random/rand32.h>
 #include <stdio.h>
 
 #if defined(CONFIG_AWS_FOTA)
 #include <net/aws_fota.h>
 #endif
 
-#if defined(CONFIG_BOARD_QEMU_X86) && !defined(CONFIG_BSD_LIBRARY)
+#if defined(CONFIG_BOARD_QEMU_X86) && !defined(CONFIG_NRF_MODEM_LIB)
 #include "certificates.h"
 #endif
 
@@ -19,6 +24,14 @@ LOG_MODULE_REGISTER(aws_iot, CONFIG_AWS_IOT_LOG_LEVEL);
 
 BUILD_ASSERT(sizeof(CONFIG_AWS_IOT_BROKER_HOST_NAME) > 1,
 	    "AWS IoT hostname not set");
+
+/* Check that the client ID buffer is large enough if a static ID is used. */
+#if !defined(CONFIG_AWS_IOT_CLIENT_ID_APP)
+BUILD_ASSERT(CONFIG_AWS_IOT_CLIENT_ID_MAX_LEN >=
+	     sizeof(CONFIG_AWS_IOT_CLIENT_ID_STATIC) - 1,
+	     "AWS IoT client ID static buffer to small "
+	     "Increase CONFIG_AWS_IOT_CLIENT_ID_MAX_LEN");
+#endif /* !defined(CONFIG_AWS_IOT_CLIENT_ID_APP */
 
 #if defined(CONFIG_AWS_IOT_IPV6)
 #define AWS_AF_FAMILY AF_INET6
@@ -92,7 +105,8 @@ static char delete_rejected_topic[DELETE_REJECTED_TOPIC_LEN + 1];
 static struct cloud_backend *aws_iot_backend;
 #endif
 
-#define AWS_IOT_POLL_TIMEOUT_MS 500
+/* Empty string used to request the AWS IoT shadow document. */
+#define AWS_IOT_SHADOW_REQUEST_STRING ""
 
 static struct aws_iot_app_topic_data app_topic_data;
 static struct mqtt_client client;
@@ -106,6 +120,21 @@ static aws_iot_evt_handler_t module_evt_handler;
 
 static atomic_t disconnect_requested;
 static atomic_t connection_poll_active;
+
+/* Flag that indicates if the client is disconnected from the
+ * AWS IoT broker, or not.
+ */
+static atomic_t aws_iot_disconnected = ATOMIC_INIT(1);
+
+/* Structure used to confirm successful subscriptions. */
+static struct aws_iot_suback_confirmation {
+	/* Subscription ID for application specific topics. */
+	uint16_t app_subs_message_id;
+	/* Subscription ID for AWS specific topics. */
+	uint16_t aws_subs_message_id;
+	/* Number of active topic lists subscribed to by the AWS IoT backend. */
+	uint8_t active_topic_list_count;
+} suback_conf;
 
 static K_SEM_DEFINE(connection_poll_sem, 0, 1);
 
@@ -199,7 +228,7 @@ static int api_connect_error_translate(const int err)
 		return -ENODATA;
 	}
 }
-#endif /* defined(CONFIG_BSD_LIBRARY) */
+#endif /* defined(CONFIG_NRF_MODEM_LIB) */
 
 static void aws_iot_notify_event(const struct aws_iot_evt *aws_iot_evt)
 {
@@ -231,7 +260,7 @@ static void aws_iot_notify_event(const struct aws_iot_evt *aws_iot_evt)
 		cloud_evt.type = CLOUD_EVT_DATA_RECEIVED;
 		cloud_evt.data.msg.buf = aws_iot_evt->data.msg.ptr;
 		cloud_evt.data.msg.len = aws_iot_evt->data.msg.len;
-		cloud_evt.data.msg.endpoint.type = CLOUD_EP_TOPIC_MSG;
+		cloud_evt.data.msg.endpoint.type = CLOUD_EP_MSG;
 		cloud_evt.data.msg.endpoint.str =
 				(char *)aws_iot_evt->data.msg.topic.str;
 		cloud_evt.data.msg.endpoint.len =
@@ -252,6 +281,9 @@ static void aws_iot_notify_event(const struct aws_iot_evt *aws_iot_evt)
 	case AWS_IOT_EVT_ERROR:
 		cloud_evt.data.err = aws_iot_evt->data.err;
 		cloud_evt.type = CLOUD_EVT_ERROR;
+	case AWS_IOT_EVT_FOTA_ERROR:
+		cloud_evt.type = CLOUD_EVT_FOTA_ERROR;
+		cloud_evt.data.err = aws_iot_evt->data.err;
 		break;
 	case AWS_IOT_EVT_FOTA_DL_PROGRESS:
 		cloud_evt.type = CLOUD_EVT_FOTA_DL_PROGRESS;
@@ -301,12 +333,13 @@ static void aws_fota_cb_handler(struct aws_fota_event *fota_evt)
 		break;
 	case AWS_FOTA_EVT_ERROR:
 		LOG_ERR("AWS_FOTA_EVT_ERROR");
-		aws_iot_evt.type = AWS_IOT_EVT_ERROR;
+		aws_iot_evt.type = AWS_IOT_EVT_FOTA_ERROR;
 		break;
 	case AWS_FOTA_EVT_DL_PROGRESS:
 		LOG_DBG("AWS_FOTA_EVT_DL_PROGRESS, (%d%%)",
 			fota_evt->dl.progress);
 		aws_iot_evt.type = AWS_IOT_EVT_FOTA_DL_PROGRESS;
+		aws_iot_evt.data.fota_progress = fota_evt->dl.progress;
 		break;
 	default:
 		LOG_ERR("Unknown FOTA event");
@@ -409,8 +442,9 @@ static int aws_iot_topics_populate(char *const id, size_t id_len)
 	return 0;
 }
 
-/** Returns the number of topics subscribed to (0 or greater),
-  * or a negative error code. */
+/* Returns the number of topics subscribed to (0 or greater),
+ * or a negative error code.
+ */
 static int topic_subscribe(void)
 {
 	int err;
@@ -481,10 +515,13 @@ static int topic_subscribe(void)
 	};
 
 	if (app_topic_data.list_count > 0) {
+
+		suback_conf.app_subs_message_id = k_cycle_get_32();
+
 		const struct mqtt_subscription_list app_sub_list = {
 			.list = app_topic_data.list,
 			.list_count = app_topic_data.list_count,
-			.message_id = sys_rand32_get()
+			.message_id = suback_conf.app_subs_message_id
 		};
 
 		for (size_t i = 0; i < app_sub_list.list_count; i++) {
@@ -495,14 +532,20 @@ static int topic_subscribe(void)
 		err = mqtt_subscribe(&client, &app_sub_list);
 		if (err) {
 			LOG_ERR("Application topics subscribe, error: %d", err);
+			return err;
 		}
+
+		suback_conf.active_topic_list_count++;
 	}
 
 	if (ARRAY_SIZE(aws_iot_rx_list) > 0) {
+
+		suback_conf.aws_subs_message_id = k_cycle_get_32();
+
 		const struct mqtt_subscription_list aws_sub_list = {
 			.list = (struct mqtt_topic *)&aws_iot_rx_list,
 			.list_count = ARRAY_SIZE(aws_iot_rx_list),
-			.message_id = sys_rand32_get()
+			.message_id = suback_conf.aws_subs_message_id
 		};
 
 		for (size_t i = 0; i < aws_sub_list.list_count; i++) {
@@ -513,13 +556,85 @@ static int topic_subscribe(void)
 		err = mqtt_subscribe(&client, &aws_sub_list);
 		if (err) {
 			LOG_ERR("AWS shadow topics subscribe, error: %d", err);
+			return err;
 		}
+
+		suback_conf.active_topic_list_count++;
 	}
 
 	if (err < 0) {
 		return err;
 	}
 	return app_topic_data.list_count + ARRAY_SIZE(aws_iot_rx_list);
+}
+
+static void device_shadow_document_request(void)
+{
+	int err;
+
+	/* The device shadow document is requested by sending an empty string to
+	 * $aws/things/<thing-name>/shadow/get/. The shadow document is
+	 * published to the $aws/things/<thing-name>/shadow/get/accepted topic.
+	 * To subscribe to this topic set the
+	 * CONFIG_AWS_IOT_TOPIC_GET_ACCEPTED_SUBSCRIBE configurable option. If
+	 * no AWS shadow document exist an error message will be published to
+	 * the $aws/things/<thing-name>/shadow/get/rejected topic. Messages
+	 * from this topic can be subscribed to by setting the
+	 * CONFIG_AWS_IOT_TOPIC_GET_REJECTED_SUBSCRIBE configurable option.
+	 */
+	struct aws_iot_data msg = {
+		.topic.type = AWS_IOT_SHADOW_TOPIC_GET,
+		.ptr = AWS_IOT_SHADOW_REQUEST_STRING,
+		.len = strlen(AWS_IOT_SHADOW_REQUEST_STRING)
+	};
+
+	err = aws_iot_send(&msg);
+	if (err) {
+		LOG_ERR("Failed to send device shadow request, error: %d", err);
+		return;
+	}
+
+	LOG_DBG("Device shadow document requested");
+}
+
+/* Function that checks if all topics subscribed to by the client has been
+ * acknowledged.
+ */
+static int subscription_list_id_check(uint16_t suback_message_id,
+				      int suback_result)
+{
+	int err;
+	static int suback_count;
+
+	if (suback_result) {
+		/* Error subscribing to topics. */
+		err = suback_result;
+		goto clean_exit;
+	}
+
+	if (suback_conf.app_subs_message_id == suback_message_id) {
+		suback_count++;
+	} else if (suback_conf.aws_subs_message_id == suback_message_id) {
+		suback_count++;
+	}
+
+	if (suback_count >= suback_conf.active_topic_list_count &&
+	    suback_conf.active_topic_list_count > 0) {
+		/* All subscriptions are acknowledged. */
+		err = 0;
+		goto clean_exit;
+	}
+
+	/* Missing subscription list acknowledgment. Wait for next
+	 * MQTT SUBACK.
+	 */
+	return -EAGAIN;
+
+clean_exit:
+	suback_count = 0;
+	memset(&suback_conf, 0, sizeof(struct aws_iot_suback_confirmation));
+
+	return err;
 }
 
 static int publish_get_payload(struct mqtt_client *const c, size_t length)
@@ -545,16 +660,9 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		return;
 	} else if (err < 0) {
 		LOG_ERR("aws_fota_mqtt_evt_handler, error: %d", err);
-		LOG_DBG("Disconnecting MQTT client...");
-
-		atomic_set(&disconnect_requested, 1);
-		err = mqtt_disconnect(c);
-		if (err) {
-			LOG_ERR("Could not disconnect: %d", err);
-			aws_iot_evt.type = AWS_IOT_EVT_ERROR;
-			aws_iot_evt.data.err = err;
-			aws_iot_notify_event(&aws_iot_evt);
-		}
+		aws_iot_evt.type = AWS_IOT_EVT_FOTA_ERROR;
+		aws_iot_evt.data.err = err;
+		aws_iot_notify_event(&aws_iot_evt);
 	}
 #endif
 
@@ -578,29 +686,44 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		aws_iot_evt.type = AWS_IOT_EVT_CONNECTED;
 		aws_iot_notify_event(&aws_iot_evt);
 
-		if (!mqtt_evt->param.connack.session_present_flag) {
-			int res = topic_subscribe();
+		if (!mqtt_evt->param.connack.session_present_flag ||
+		    IS_ENABLED(CONFIG_MQTT_CLEAN_SESSION)) {
+			err = topic_subscribe();
 
-			if (res < 0) {
+			if (err < 0) {
 				aws_iot_evt.type = AWS_IOT_EVT_ERROR;
 				aws_iot_evt.data.err = err;
 				aws_iot_notify_event(&aws_iot_evt);
 				break;
 			}
-			if (res == 0) {
+			if (err == 0) {
 				/* There were not topics to subscribe to. */
 				aws_iot_evt.type = AWS_IOT_EVT_READY;
 				aws_iot_notify_event(&aws_iot_evt);
 			} /* else: wait for SUBACK */
 		} else {
-			/** pre-existing session:
-			  * subscription is already established */
+			/* pre-existing session:
+			 * subscription is already established.
+			 */
 			aws_iot_evt.type = AWS_IOT_EVT_READY;
 			aws_iot_notify_event(&aws_iot_evt);
+
+			if (IS_ENABLED(
+				CONFIG_AWS_IOT_AUTO_DEVICE_SHADOW_REQUEST)) {
+				device_shadow_document_request();
+			}
 		}
 		break;
 	case MQTT_EVT_DISCONNECT:
 		LOG_DBG("MQTT_EVT_DISCONNECT: result = %d", mqtt_evt->result);
+
+		aws_iot_evt.data.err = AWS_IOT_DISCONNECT_MISC;
+
+		if (atomic_get(&disconnect_requested)) {
+			aws_iot_evt.data.err = AWS_IOT_DISCONNECT_USER_REQUEST;
+		}
+
+		atomic_set(&aws_iot_disconnected, 1);
 		aws_iot_evt.type = AWS_IOT_EVT_DISCONNECTED;
 		aws_iot_notify_event(&aws_iot_evt);
 		break;
@@ -643,16 +766,35 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		LOG_DBG("MQTT_EVT_SUBACK: id = %d result = %d",
 			mqtt_evt->param.suback.message_id,
 			mqtt_evt->result);
-		/* MQTT subscription established. */
-		aws_iot_evt.type = AWS_IOT_EVT_READY;
-		aws_iot_notify_event(&aws_iot_evt);
+
+		err = subscription_list_id_check(
+					mqtt_evt->param.suback.message_id,
+					mqtt_evt->result);
+		if (err == 0) {
+			/* All subscription list IDs confirmed. */
+			if (IS_ENABLED(
+				CONFIG_AWS_IOT_AUTO_DEVICE_SHADOW_REQUEST)) {
+				device_shadow_document_request();
+			}
+
+			/* MQTT subscriptions established. */
+			aws_iot_evt.type = AWS_IOT_EVT_READY;
+			aws_iot_notify_event(&aws_iot_evt);
+		} else if (err == -EAGAIN) {
+			/* Subscriptions remaining to be acknowledged. */
+		} else if (err < 0) {
+			/* Error subscribing to topics. */
+			aws_iot_evt.type = AWS_IOT_EVT_ERROR;
+			aws_iot_evt.data.err = err;
+			aws_iot_notify_event(&aws_iot_evt);
+		}
 		break;
 	default:
 		break;
 	}
 }
 
-#if !defined(CONFIG_BSD_LIBRARY)
+#if !defined(CONFIG_NRF_MODEM_LIB)
 static int certificates_provision(void)
 {
 	static bool certs_added;
@@ -694,7 +836,7 @@ static int certificates_provision(void)
 
 	return 0;
 }
-#endif /* !defined(CONFIG_BSD_LIBRARY) */
+#endif /* !defined(CONFIG_NRF_MODEM_LIB) */
 
 #if defined(CONFIG_AWS_IOT_STATIC_IPV4)
 static int broker_init(void)
@@ -806,6 +948,22 @@ static int client_broker_init(struct mqtt_client *const client)
 	client->tx_buf_size		= sizeof(tx_buffer);
 	client->transport.type		= MQTT_TRANSPORT_SECURE;
 
+#if defined(CONFIG_AWS_IOT_LAST_WILL)
+	static struct mqtt_topic last_will_topic = {
+		.topic.utf8 = CONFIG_AWS_IOT_LAST_WILL_TOPIC,
+		.topic.size = sizeof(CONFIG_AWS_IOT_LAST_WILL_TOPIC) - 1,
+		.qos = MQTT_QOS_0_AT_MOST_ONCE
+	};
+
+	static struct mqtt_utf8 last_will_message = {
+		.utf8 = CONFIG_AWS_IOT_LAST_WILL_MESSAGE,
+		.size = sizeof(CONFIG_AWS_IOT_LAST_WILL_MESSAGE) - 1
+	};
+
+	client->will_topic = &last_will_topic;
+	client->will_message = &last_will_message;
+#endif
+
 	static sec_tag_t sec_tag_list[] = { CONFIG_AWS_IOT_SEC_TAG };
 	struct mqtt_sec_config *tls_cfg = &(client->transport).tls.config;
 
@@ -815,23 +973,62 @@ static int client_broker_init(struct mqtt_client *const client)
 	tls_cfg->sec_tag_count		= ARRAY_SIZE(sec_tag_list);
 	tls_cfg->sec_tag_list		= sec_tag_list;
 	tls_cfg->hostname		= CONFIG_AWS_IOT_BROKER_HOST_NAME;
-
-#if defined(CONFIG_BSD_LIBRARY)
-	tls_cfg->session_cache		=
-		IS_ENABLED(CONFIG_AWS_IOT_TLS_SESSION_CACHING) ?
-			TLS_SESSION_CACHE_ENABLED : TLS_SESSION_CACHE_DISABLED;
-#else
-	/* TLS session caching is not supported by the Zephyr network stack */
 	tls_cfg->session_cache = TLS_SESSION_CACHE_DISABLED;
 
+#if !defined(CONFIG_NRF_MODEM_LIB)
 	err = certificates_provision();
 	if (err) {
 		LOG_ERR("Could not provision certificates, error: %d", err);
 		return err;
 	}
-#endif /* !defined(CONFIG_BSD_LIBRARY) */
+#endif /* !defined(CONFIG_NRF_MODEM_LIB) */
 
 	return err;
+}
+
+static int connect_client(struct aws_iot_config *const config)
+{
+	int err;
+
+	err = client_broker_init(&client);
+	if (err) {
+		LOG_ERR("client_broker_init, error: %d", err);
+		return err;
+	}
+
+	err = mqtt_connect(&client);
+	if (err) {
+		LOG_ERR("mqtt_connect, error: %d", err);
+		err = connect_error_translate(err);
+		return err;
+	}
+
+	if (IS_ENABLED(CONFIG_AWS_IOT_SEND_TIMEOUT)) {
+		struct timeval timeout = {
+			.tv_sec = CONFIG_AWS_IOT_SEND_TIMEOUT_SEC
+		};
+
+		err = setsockopt(client.transport.tls.sock,
+				 SOL_SOCKET,
+				 SO_SNDTIMEO,
+				 &timeout,
+				 sizeof(timeout));
+		if (err == -1) {
+			LOG_WRN("Failed to set timeout, errno: %d", errno);
+
+			/* Don't propagate this as an error. */
+			err = 0;
+		} else {
+			LOG_DBG("Using send socket timeout of %d seconds",
+				CONFIG_AWS_IOT_SEND_TIMEOUT_SEC);
+		}
+	}
+
+	if (config != NULL) {
+		config->socket = client.transport.tls.sock;
+	}
+
+	return 0;
 }
 
 static int connection_poll_start(void)
@@ -854,7 +1051,7 @@ int aws_iot_ping(void)
 
 int aws_iot_keepalive_time_left(void)
 {
-	return (int)mqtt_keepalive_time_left(&client);
+	return mqtt_keepalive_time_left(&client);
 }
 
 int aws_iot_input(void)
@@ -875,15 +1072,15 @@ int aws_iot_send(const struct aws_iot_data *const tx_data)
 
 	switch (tx_data_pub.topic.type) {
 #if defined(CONFIG_CLOUD_API)
-	case CLOUD_EP_TOPIC_STATE:
+	case CLOUD_EP_STATE_GET:
 		tx_data_pub.topic.str = get_topic;
 		tx_data_pub.topic.len = strlen(get_topic);
 		break;
-	case CLOUD_EP_TOPIC_MSG:
+	case CLOUD_EP_STATE:
 		tx_data_pub.topic.str = update_topic;
 		tx_data_pub.topic.len = strlen(update_topic);
 		break;
-	case CLOUD_EP_TOPIC_STATE_DELETE:
+	case CLOUD_EP_STATE_DELETE:
 		tx_data_pub.topic.str = delete_topic;
 		tx_data_pub.topic.len = strlen(delete_topic);
 		break;
@@ -939,26 +1136,23 @@ int aws_iot_connect(struct aws_iot_config *const config)
 
 	if (IS_ENABLED(CONFIG_AWS_IOT_CONNECTION_POLL_THREAD)) {
 		err = connection_poll_start();
+		if (err) {
+			LOG_WRN("connection_poll_start failed, error: %d", err);
+			return err;
+		}
 	} else {
 		atomic_set(&disconnect_requested, 0);
 
-		err = client_broker_init(&client);
+		err = connect_client(config);
 		if (err) {
-			LOG_ERR("client_broker_init, error: %d", err);
+			LOG_WRN("connect_client failed, error: %d", err);
 			return err;
 		}
 
-		err = mqtt_connect(&client);
-		if (err) {
-			LOG_ERR("mqtt_connect, error: %d", err);
-		}
-
-		err = connect_error_translate(err);
-
-		config->socket = client.transport.tls.sock;
+		atomic_set(&aws_iot_disconnected, 0);
 	}
 
-	return err;
+	return 0;
 }
 
 int aws_iot_subscription_topics_add(
@@ -992,6 +1186,12 @@ int aws_iot_init(const struct aws_iot_config *const config,
 	int err;
 
 	if (IS_ENABLED(CONFIG_AWS_IOT_CLIENT_ID_APP) &&
+		config == NULL) {
+		LOG_ERR("config is NULL");
+		return -EINVAL;
+	}
+
+	if (IS_ENABLED(CONFIG_AWS_IOT_CLIENT_ID_APP) &&
 	    config->client_id_len >= CONFIG_AWS_IOT_CLIENT_ID_MAX_LEN) {
 		LOG_ERR("Client ID string too long");
 		return -EMSGSIZE;
@@ -1003,7 +1203,12 @@ int aws_iot_init(const struct aws_iot_config *const config,
 		return -ENODATA;
 	}
 
-	err = aws_iot_topics_populate(config->client_id, config->client_id_len);
+	if (IS_ENABLED(CONFIG_AWS_IOT_CLIENT_ID_APP)) {
+		err = aws_iot_topics_populate(config->client_id, config->client_id_len);
+	} else {
+		err = aws_iot_topics_populate(NULL, 0);
+	}
+
 	if (err) {
 		LOG_ERR("aws_topics_populate, error: %d", err);
 		return err;
@@ -1040,45 +1245,39 @@ start:
 	aws_iot_evt.type = AWS_IOT_EVT_CONNECTING;
 	aws_iot_notify_event(&aws_iot_evt);
 
-	err = client_broker_init(&client);
-	if (err) {
-		LOG_ERR("client_broker_init, error: %d", err);
-	}
-
-	err = mqtt_connect(&client);
-	if (err) {
-		LOG_ERR("mqtt_connect, error: %d", err);
-	}
-
-	err = connect_error_translate(err);
-
+	err = connect_client(NULL);
 	if (err != AWS_IOT_CONNECT_RES_SUCCESS) {
 		aws_iot_evt.data.err = err;
 		aws_iot_evt.type = AWS_IOT_EVT_CONNECTING;
 		aws_iot_notify_event(&aws_iot_evt);
 		goto reset;
-	} else {
-		LOG_DBG("AWS broker connection request sent.");
 	}
+
+	LOG_DBG("AWS IoT broker connection request sent");
 
 	fds[0].fd = client.transport.tls.sock;
 	fds[0].events = POLLIN;
 
 	aws_iot_evt.type = AWS_IOT_EVT_DISCONNECTED;
+	atomic_set(&aws_iot_disconnected, 0);
 
 	while (true) {
-		err = poll(fds, ARRAY_SIZE(fds), AWS_IOT_POLL_TIMEOUT_MS);
+		err = poll(fds, ARRAY_SIZE(fds), aws_iot_keepalive_time_left());
 
+		/* If poll returns 0 the timeout has expired. */
 		if (err == 0) {
-			if (aws_iot_keepalive_time_left() <
-			    AWS_IOT_POLL_TIMEOUT_MS) {
-				aws_iot_ping();
-			}
+			aws_iot_ping();
 			continue;
 		}
 
 		if ((fds[0].revents & POLLIN) == POLLIN) {
 			aws_iot_input();
+
+			if (atomic_get(&aws_iot_disconnected) == 1) {
+				LOG_DBG("The cloud socket is already closed.");
+				break;
+			}
+
 			continue;
 		}
 
@@ -1086,14 +1285,6 @@ start:
 			LOG_ERR("poll() returned an error: %d", err);
 			aws_iot_evt.data.err = AWS_IOT_DISCONNECT_MISC;
 			break;
-		}
-
-		if (atomic_get(&disconnect_requested)) {
-			atomic_set(&disconnect_requested, 0);
-			LOG_DBG("Expected disconnect event.");
-			aws_iot_evt.data.err = AWS_IOT_DISCONNECT_MISC;
-			aws_iot_notify_event(&aws_iot_evt);
-			goto reset;
 		}
 
 		if ((fds[0].revents & POLLNVAL) == POLLNVAL) {
@@ -1120,9 +1311,15 @@ start:
 		}
 	}
 
-
-	aws_iot_notify_event(&aws_iot_evt);
-	aws_iot_disconnect();
+	/* Upon a socket error, disconnect the client and notify the
+	 * application. If the client has already been disconnected this has
+	 * occurred via a MQTT DISCONNECT event and the application has
+	 * already been notified.
+	 */
+	if (atomic_get(&aws_iot_disconnected) == 0) {
+		aws_iot_notify_event(&aws_iot_evt);
+		aws_iot_disconnect();
+	}
 
 reset:
 	atomic_set(&connection_poll_active, 0);
@@ -1133,7 +1330,7 @@ reset:
 #ifdef CONFIG_BOARD_QEMU_X86
 #define POLL_THREAD_STACK_SIZE 4096
 #else
-#define POLL_THREAD_STACK_SIZE 2560
+#define POLL_THREAD_STACK_SIZE 3072
 #endif
 K_THREAD_DEFINE(connection_poll_thread, POLL_THREAD_STACK_SIZE,
 		aws_iot_cloud_poll, NULL, NULL, NULL,

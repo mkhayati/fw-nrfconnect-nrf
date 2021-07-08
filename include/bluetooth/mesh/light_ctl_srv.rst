@@ -3,6 +3,10 @@
 Light CTL Server
 ################
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Color-Tunable Light (CTL) Server represents a single light on a mesh device.
 It should be instantiated in the light fixture node.
 
@@ -22,13 +26,13 @@ The following two model instances are added:
 * Light CTL Setup Server - Provides write access to Default CTL state and Temperature Range meta states, allowing configurator devices to set up a temperature range and a default CTL state
 
 In addition to the extended Lightness Server model, the Light CTL Server also requires a :ref:`bt_mesh_light_temp_srv_readme` to be instantiated on a subsequent element.
-The Light Temperature Server should reference the :cpp:member:`bt_mesh_light_ctl_srv::temp_srv`.
+The Light Temperature Server should reference the :c:member:`bt_mesh_light_ctl_srv.temp_srv`.
 
 Conventionally, the Light Temperature Server model is instantiated on the very next element, and the composition data looks as presented below.
 
-.. code-block:: console
+.. code-block:: c
 
-    static struct bt_mesh_light_ctl_srv light_ctl_srv = BT_MESH_LIGHT_CTL_SRV_INIT(&light_ctl_handlers);
+    static struct bt_mesh_light_ctl_srv light_ctl_srv = BT_MESH_LIGHT_CTL_SRV_INIT(&lightness_handlers, &light_temp_handlers);
 
     static struct bt_mesh_elem elements[] = {
         BT_MESH_ELEM(
@@ -41,11 +45,13 @@ Conventionally, the Light Temperature Server model is instantiated on the very n
             BT_MESH_MODEL_NONE),
     };
 
+The Light CTL Server does not require any message handler callbacks, as all its states are bound to the included :ref:`bt_mesh_lightness_srv_readme` and :ref:`bt_mesh_light_temp_srv_readme` models.
+The Lightness and Light Temperature Server callbacks will pass pointers to :c:member:`bt_mesh_light_ctl_srv.lightness_srv` and :c:member:`bt_mesh_light_ctl_srv.temp_srv`, respectively.
+
 .. note::
 
     The Light CTL Server will verify that its internal Light Temperature Server is instantiated on a subsequent element on startup.
-    If the Light Temperature Server is missing or instantiated on the same or a preceding element, the Bluetooth Mesh startup procedure will
-    fail, and the device will not be responsive.
+    If the Light Temperature Server is missing or instantiated on the same or a preceding element, the Bluetooth mesh startup procedure will fail, and the device will not be responsive.
 
 States
 ======
@@ -59,11 +65,11 @@ Lightness: ``uint16_t``
 
     The Lightness state power-up behavior is determined by the On Power Up state of the extended :ref:`bt_mesh_ponoff_srv_readme`:
 
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_OFF <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_OFF>` - The Lightness state is set to ``0`` on power-up.
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_ON <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_ON>` - The Lightness state is set to Default Lightness on power-up.
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_RESTORE <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_RESTORE>` - The Lightness state is set to the last known Light level (zero or non-zero).
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_OFF` - The Lightness state is set to ``0`` on power-up.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_ON` - The Lightness state is set to Default Lightness on power-up.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_RESTORE` - The Lightness state is set to the last known Light level (zero or non-zero).
 
-    Your application is expected to hold the state memory and provide access to the state through the :cpp:type:`bt_mesh_light_ctl_srv_handlers` handler structure.
+    Your application is expected to hold the state memory and provide access to the state through the :c:struct:`bt_mesh_light_ctl_srv_handlers` handler structure.
 
 Temperature: ``uint16_t``
     The Temperature state represents the color temperature of the tunable white light emitted by an element.
@@ -71,11 +77,11 @@ Temperature: ``uint16_t``
 
     The Temperature state power-up behavior is determined by the On Power Up state of the extended :ref:`bt_mesh_ponoff_srv_readme`:
 
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_OFF <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_OFF>` - The Temperature state is set to Default Temperature on power-up.
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_ON <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_ON>` - The Temperature state is set to Default Temperature on power-up.
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_RESTORE <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_RESTORE>` - The Temperature state is set to the last known Temperature level.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_OFF` - The Temperature state is set to Default Temperature on power-up.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_ON` - The Temperature state is set to Default Temperature on power-up.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_RESTORE` - The Temperature state is set to the last known Temperature level.
 
-    Your application is expected to hold the state memory and provide access to the state through the :cpp:type:`bt_mesh_light_ctl_srv_handlers` handler structure.
+    Your application is expected to hold the state memory and provide access to the state through the :c:struct:`bt_mesh_light_ctl_srv_handlers` handler structure.
 
 Delta UV: ``int16_t``
     The Temperature state represents the distance from the black body curve.
@@ -88,29 +94,29 @@ Delta UV: ``int16_t``
 
     The Delta UV state of the Light CTL Server is shared by the assosiated :ref:`bt_mesh_light_temp_srv_readme`, and its power-up behavior is determined by the On Power Up state of the extended :ref:`bt_mesh_ponoff_srv_readme`:
 
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_OFF <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_OFF>` - The Delta UV state is set to Default Delta UV on power-up.
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_ON <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_ON>` - The Delta UV state is set to Default Delta UV on power-up.
-    * :cpp:enumerator:`BT_MESH_ON_POWER_UP_RESTORE <bt_mesh_ponoff::BT_MESH_ON_POWER_UP_RESTORE>` - The Delta UV state is set to the last known Delta UV level.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_OFF` - The Delta UV state is set to Default Delta UV on power-up.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_ON` - The Delta UV state is set to Default Delta UV on power-up.
+    * :c:enumerator:`BT_MESH_ON_POWER_UP_RESTORE` - The Delta UV state is set to the last known Delta UV level.
 
-    Your application is expected to hold the state memory and provide access to the state through the :cpp:type:`bt_mesh_light_ctl_srv_handlers` handler structure.
+    Your application is expected to hold the state memory and provide access to the state through the :c:struct:`bt_mesh_light_ctl_srv_handlers` handler structure.
 
-Default CTL: :cpp:type:`bt_mesh_light_ctl`
+Default CTL: :c:struct:`bt_mesh_light_ctl`
     The Default CTL state is a meta state that controls the default Lightness, Temperature and Delta UV level.
     It is used when the light is turned on, but its exact state levels are not specified.
 
     The memory for the Default Light state is held by the model, and the application may receive updates on state changes through the
-    :cpp:member:`bt_mesh_lightness_srv_handlers::default_update` callback.
+    :c:member:`bt_mesh_lightness_srv_handlers.default_update` callback.
 
     The Default Light state uses the configured lightness representation.
 
-Temperature Range: :cpp:type:`bt_mesh_light_temp_range`
+Temperature Range: :c:struct:`bt_mesh_light_temp_range`
     The Temperature Range state is a meta state that determines the accepted Temperature level range.
     If the Temperature level is set to a value outside the current Temperature Range, it is moved to fit inside the range.
     If the Temperature Range changes to exclude the current Temperature level, the Temperature level should be changed accordingly.
 
     The Temperature Range state of the Light CTL Server is shared by the assosiated :ref:`bt_mesh_light_temp_srv_readme`.
 
-    The memory for the Temperature Range state is held by the model, and the application may receive updates on state changes through the :cpp:member:`bt_mesh_light_ctl_srv_handlers::temp_range_update` callback.
+    The memory for the Temperature Range state is held by the model, and the application may receive updates on state changes through the :c:member:`bt_mesh_light_ctl_srv_handlers.temp_range_update` callback.
 
 
 Extended models
@@ -121,10 +127,10 @@ The Light CTL Server extends the following model:
 * :ref:`bt_mesh_lightness_srv_readme`
 
 The state of the extended Lightness Server model is for the most part bound to states in the Light CTL Server.
-The only exception is the Lightness range state, which is exposed to the application through the :cpp:member:`bt_mesh_light_ctl_srv_handlers::lightness_range_update` callback of the Light CTL Server model.
+The only exception is the Lightness range state, which is exposed to the application through the :c:member:`bt_mesh_light_ctl_srv_handlers.lightness_range_update` callback of the Light CTL Server model.
 
 In addition to the extended Lightness Server model, the Light CTL Server model is associated with a Light Temperature model on a subsequent element.
-Contrary to the extended models, the associated models do not share subscription lists, but still share states.
+Unlike the extended models, the associated models do not share subscription lists, but still share states.
 
 Persistent storage
 ===================
@@ -134,7 +140,7 @@ The Light CTL Server stores the following information:
 * Any changes to the Default CTL and Temperature Range states
 * The last known Lightness, Temperature and Delta UV level
 
-This information is used to reestablish the correct Light configuration when the device powers up.
+This information is used to reestablish the correct light configuration when the device powers up.
 
 API documentation
 ==================

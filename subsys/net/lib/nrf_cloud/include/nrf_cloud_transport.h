@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2017 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef NRF_CLOUD_TRANSPORT_H__
@@ -61,7 +61,7 @@ struct nct_evt {
 int nct_socket_get(void);
 
 /**@brief Initialization routine for the transport. */
-int nct_init(void);
+int nct_init(const char * const client_id);
 
 /**@brief Establishes the transport connection. */
 int nct_connect(void);
@@ -117,6 +117,10 @@ void nct_process(void);
 /**
  * @brief Helper function to determine when next keep alive message should be
  *        sent. Can be used for instance as a source for `poll` timeout.
+ *
+ * @return Time in milliseconds until next keep alive message is expected to
+ *         be sent.
+ * @return -1 if keep alive messages are not enabled.
  */
 int nct_keepalive_time_left(void);
 
@@ -124,7 +128,7 @@ int nct_keepalive_time_left(void);
 int nct_input(const struct nct_evt *evt);
 
 /**@brief Signal to apply FOTA update. */
-void nct_apply_update(void);
+void nct_apply_update(const struct nrf_cloud_evt * const evt);
 
 #ifdef __cplusplus
 }

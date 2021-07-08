@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include "data_event.h"
@@ -29,6 +29,6 @@ EVENT_INFO_DEFINE(data_event,
 		  profile_data_event);
 
 EVENT_TYPE_DEFINE(data_event,
-		  true,
+		  false,
 		  NULL,
 		  &data_event_info);

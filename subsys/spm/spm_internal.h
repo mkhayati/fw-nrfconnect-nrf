@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef SPM_INTERNAL_H__
@@ -11,6 +11,7 @@
 #include <nrfx.h>
 #include <sys/util.h>
 #include <sys/__assert.h>
+#include <nrf_erratas.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,42 +31,12 @@ extern "C" {
 				/ RAM_SECURE_ATTRIBUTION_REGION_SIZE)
 
 /* SPU FLASH regions */
-#if (defined(CONFIG_SOC_NRF5340_CPUAPP) \
-	&& defined(CONFIG_NRF5340_CPUAPP_ERRATUM19))
-static inline uint32_t spu_flash_region_size(void)
-{
-	if (NRF_FICR->INFO.PART == 0x5340) {
-		if (NRF_FICR->INFO.VARIANT == 0x41414142) {
-			return 32*1024;
-		}
-		return 16*1024;
-	}
-	__ASSERT(false, "Function should only be called on an nRF53 device.");
-	return 0;
-}
-
-static inline uint32_t num_spu_flash_regions(void)
-{
-	if (NRF_FICR->INFO.PART == 0x5340) {
-		if (NRF_FICR->INFO.VARIANT == 0x41414142) {
-			return 32;
-		}
-		return 64;
-	}
-	__ASSERT(false, "Function should only be called on an nRF53 device.");
-	return 0;
-}
-#define FLASH_SECURE_ATTRIBUTION_REGION_SIZE spu_flash_region_size()
-#define NUM_FLASH_SECURE_ATTRIBUTION_REGIONS num_spu_flash_regions()
-#else
-
 #define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
 #define SOC_NV_FLASH_SIZE DT_REG_SIZE(SOC_NV_FLASH_NODE)
 
 #define FLASH_SECURE_ATTRIBUTION_REGION_SIZE CONFIG_NRF_SPU_FLASH_REGION_SIZE
 #define NUM_FLASH_SECURE_ATTRIBUTION_REGIONS (SOC_NV_FLASH_SIZE \
 				/ FLASH_SECURE_ATTRIBUTION_REGION_SIZE)
-#endif
 
 /* Minimum size of Non-Secure Callable regions. */
 #define FLASH_NSC_MIN_SIZE 32
@@ -140,10 +111,20 @@ static inline uint32_t num_spu_flash_regions(void)
 	  << SPU_PERIPHID_PERM_SECATTR_Pos) &                                  \
 	 SPU_PERIPHID_PERM_SECATTR_Msk)
 
+#define PERIPH_SEC                                                             \
+	((SPU_PERIPHID_PERM_SECATTR_Secure                                     \
+	  << SPU_PERIPHID_PERM_SECATTR_Pos) &                                  \
+	 SPU_PERIPHID_PERM_SECATTR_Msk)
+
 #define PERIPH_DMA_NOSEP                                                       \
 	((SPU_PERIPHID_PERM_DMA_NoSeparateAttribute                            \
 	  << SPU_PERIPHID_PERM_DMA_Pos) &                                      \
 	 SPU_PERIPHID_PERM_DMA_Msk)
+
+#define PERIPH_DMASEC                                                          \
+	((SPU_PERIPHID_PERM_DMASEC_Secure                                      \
+	  << SPU_PERIPHID_PERM_DMASEC_Pos) &                                   \
+	 SPU_PERIPHID_PERM_DMASEC_Msk)
 
 #define PERIPH_LOCK                                                            \
 	((SPU_PERIPHID_PERM_LOCK_Locked << SPU_PERIPHID_PERM_LOCK_Pos) &       \

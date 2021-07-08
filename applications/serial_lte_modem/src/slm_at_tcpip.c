@@ -1,18 +1,19 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <logging/log.h>
 #include <zephyr.h>
 #include <stdio.h>
 #include <string.h>
 #include <net/socket.h>
-#include <modem/modem_info.h>
+#include <modem/modem_key_mgmt.h>
 #include <net/tls_credentials.h>
 #include "slm_util.h"
 #include "slm_at_host.h"
 #include "slm_at_tcpip.h"
+#include "slm_native_tls.h"
 
 LOG_MODULE_REGISTER(tcpip, CONFIG_SLM_LOG_LEVEL);
 
@@ -45,54 +46,11 @@ enum slm_socket_role {
 	AT_SOCKET_ROLE_SERVER
 };
 
-/**@brief List of supported AT commands. */
-enum slm_tcpip_at_cmd_type {
-	AT_SOCKET,
-	AT_SOCKETOPT,
-	AT_BIND,
-	AT_CONNECT,
-	AT_LISTEN,
-	AT_ACCEPT,
-	AT_SEND,
-	AT_RECV,
-	AT_SENDTO,
-	AT_RECVFROM,
-	AT_GETADDRINFO,
-	AT_TCPIP_MAX
-};
-
-/** forward declaration of cmd handlers **/
-static int handle_at_socket(enum at_cmd_type cmd_type);
-static int handle_at_socketopt(enum at_cmd_type cmd_type);
-static int handle_at_bind(enum at_cmd_type cmd_type);
-static int handle_at_connect(enum at_cmd_type cmd_type);
-static int handle_at_listen(enum at_cmd_type cmd_type);
-static int handle_at_accept(enum at_cmd_type cmd_type);
-static int handle_at_send(enum at_cmd_type cmd_type);
-static int handle_at_recv(enum at_cmd_type cmd_type);
-static int handle_at_sendto(enum at_cmd_type cmd_type);
-static int handle_at_recvfrom(enum at_cmd_type cmd_type);
-static int handle_at_getaddrinfo(enum at_cmd_type cmd_type);
-
-/**@brief SLM AT Command list type. */
-static slm_at_cmd_list_t m_tcpip_at_list[AT_TCPIP_MAX] = {
-	{AT_SOCKET, "AT#XSOCKET", handle_at_socket},
-	{AT_SOCKETOPT, "AT#XSOCKETOPT", handle_at_socketopt},
-	{AT_BIND, "AT#XBIND", handle_at_bind},
-	{AT_CONNECT, "AT#XCONNECT", handle_at_connect},
-	{AT_LISTEN, "AT#XLISTEN", handle_at_listen},
-	{AT_ACCEPT, "AT#XACCEPT", handle_at_accept},
-	{AT_SEND, "AT#XSEND", handle_at_send},
-	{AT_RECV, "AT#XRECV", handle_at_recv},
-	{AT_SENDTO, "AT#XSENDTO", handle_at_sendto},
-	{AT_RECVFROM, "AT#XRECVFROM", handle_at_recvfrom},
-	{AT_GETADDRINFO, "AT#XGETADDRINFO", handle_at_getaddrinfo},
-};
-
 static struct sockaddr_in remote;
 
 static struct tcpip_client {
 	int sock; /* Socket descriptor. */
+	sec_tag_t sec_tag; /* Security tag of the credential */
 	int role; /* Client or Server role */
 	int sock_peer; /* Socket descriptor for peer. */
 	int ip_proto; /* IP protocol */
@@ -104,8 +62,8 @@ void rsp_send(const uint8_t *str, size_t len);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
-extern struct modem_param_info modem_param;
-extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
+extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
 
 /**@brief Resolves host IPv4 address and port
  */
@@ -167,6 +125,7 @@ static int do_socket_open(uint8_t type, uint8_t role, int sec_tag)
 {
 	int ret = 0;
 
+	client.sec_tag = sec_tag;
 	if (type == SOCK_STREAM) {
 		if (sec_tag == INVALID_SEC_TAG) {
 			client.sock = socket(AF_INET, SOCK_STREAM,
@@ -197,16 +156,39 @@ static int do_socket_open(uint8_t type, uint8_t role, int sec_tag)
 		goto error_exit;
 	}
 
-	if (sec_tag != INVALID_SEC_TAG) {
-		sec_tag_t sec_tag_list[1] = { sec_tag };
+	if (client.sec_tag != INVALID_SEC_TAG) {
+		sec_tag_t sec_tag_list[1] = { client.sec_tag };
+#if defined(CONFIG_SLM_NATIVE_TLS)
+		int verify;
 
+		ret = slm_tls_loadcrdl(client.sec_tag);
+		if (ret < 0) {
+			LOG_ERR("Fail to load credential: %d", ret);
+			return ret;
+		}
+
+		/* Set up default TLS peer verification */
 		if (role == AT_SOCKET_ROLE_SERVER) {
-			sprintf(rsp_buf,
-				"#XSOCKET: (D)TLS Server not supported\r\n");
+			verify = TLS_PEER_VERIFY_NONE;
+		} else {
+			verify = TLS_PEER_VERIFY_REQUIRED;
+		}
+
+		ret = setsockopt(client.sock, SOL_TLS, TLS_PEER_VERIFY,
+				 &verify, sizeof(verify));
+		if (ret) {
+			printk("Failed to setup peer verification, err %d\n",
+			       errno);
+			return ret;
+		}
+#else
+		if (role == AT_SOCKET_ROLE_SERVER) {
+			sprintf(rsp_buf, "\r\n#XSOCKET: \"not supported\"\r\n");
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			ret = -ENOTSUP;
 			goto error_exit;
 		}
+#endif
 
 		ret = setsockopt(client.sock, SOL_TLS, TLS_SEC_TAG_LIST,
 				sec_tag_list, sizeof(sec_tag_t));
@@ -218,7 +200,7 @@ static int do_socket_open(uint8_t type, uint8_t role, int sec_tag)
 	}
 
 	client.role = role;
-	sprintf(rsp_buf, "#XSOCKET: %d, %d, %d, %d\r\n", client.sock,
+	sprintf(rsp_buf, "\r\n#XSOCKET: %d,%d,%d,%d\r\n", client.sock,
 		type, role, client.ip_proto);
 	rsp_send(rsp_buf, strlen(rsp_buf));
 
@@ -239,6 +221,15 @@ static int do_socket_close(int error)
 	int ret = 0;
 
 	if (client.sock > 0) {
+#if defined(CONFIG_SLM_NATIVE_TLS)
+		if (client.sec_tag != INVALID_SEC_TAG) {
+			ret = slm_tls_unloadcrdl(client.sec_tag);
+			if (ret < 0) {
+				LOG_ERR("Fail to load credential: %d", ret);
+				return ret;
+			}
+		}
+#endif
 		ret = close(client.sock);
 		if (ret < 0) {
 			LOG_WRN("close() failed: %d", -errno);
@@ -248,7 +239,7 @@ static int do_socket_close(int error)
 			close(client.sock_peer);
 		}
 		slm_at_tcpip_init();
-		sprintf(rsp_buf, "#XSOCKET: %d, closed\r\n", error);
+		sprintf(rsp_buf, "\r\n#XSOCKET: %d,\"closed\"\r\n", error);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		LOG_DBG("Socket closed");
 	}
@@ -263,7 +254,7 @@ static int do_socketopt_set(int name, int value)
 	switch (name) {
 	case SO_REUSEADDR:	/* Ignored by Zephyr */
 	case SO_ERROR:		/* Ignored by Zephyr */
-		sprintf(rsp_buf, "#XSOCKETOPT: ignored\r\n");
+		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"ignored\"\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		ret = 0;
 		break;
@@ -283,9 +274,8 @@ static int do_socketopt_set(int name, int value)
 	case SO_TXTIME:		/* Not supported by SLM for now */
 	case SO_SOCKS5:		/* Not supported by SLM for now */
 	default:
-		sprintf(rsp_buf, "#XSOCKETOPT: not supported\r\n");
+		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"not supported\"\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
-		ret = 0;
 		break;
 	}
 
@@ -299,7 +289,7 @@ static int do_socketopt_get(int name)
 	switch (name) {
 	case SO_REUSEADDR:	/* Ignored by Zephyr */
 	case SO_ERROR:		/* Ignored by Zephyr */
-		sprintf(rsp_buf, "#XSOCKETOPT: ignored\r\n");
+		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"ignored\"\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		break;
 
@@ -312,7 +302,7 @@ static int do_socketopt_get(int name)
 		if (ret) {
 			LOG_ERR("getsockopt() error: %d", -errno);
 		} else {
-			sprintf(rsp_buf, "#XSOCKETOPT: %d sec\r\n",
+			sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"%d sec\"\r\n",
 				(int)tmo.tv_sec);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
@@ -323,7 +313,7 @@ static int do_socketopt_get(int name)
 	case SO_TXTIME:		/* Not supported by SLM for now */
 	case SO_SOCKS5:		/* Not supported by SLM for now */
 	default:
-		sprintf(rsp_buf, "#XSOCKETOPT: not supported\r\n");
+		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"not supported\"\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		break;
 	}
@@ -336,30 +326,28 @@ static int do_bind(uint16_t port)
 	int ret;
 	struct sockaddr_in local;
 	int addr_len;
+	char ipv4_addr[NET_IPV4_ADDR_LEN];
 
 	local.sin_family = AF_INET;
 	local.sin_port = htons(port);
 
-	ret = modem_info_params_get(&modem_param);
-	if (ret) {
-		LOG_ERR("Unable to obtain modem parameters (%d)", ret);
+	if (!util_get_ipv4_addr(ipv4_addr)) {
+		LOG_ERR("Unable to obtain local IPv4 address");
 		return -1;
 	}
 	/* Check network connection status by checking local IP address */
-	addr_len = strlen(modem_param.network.ip_address.value_string);
+	addr_len = strlen(ipv4_addr);
 	if (addr_len == 0) {
 		LOG_ERR("LTE not connected yet");
 		return -1;
 	}
-	if (!check_for_ipv4(modem_param.network.ip_address.value_string,
-			addr_len)) {
+	if (!check_for_ipv4(ipv4_addr, addr_len)) {
 		LOG_ERR("Invalid local address");
 		return -1;
 	}
 
 	/* NOTE inet_pton() returns 1 as success */
-	if (inet_pton(AF_INET, modem_param.network.ip_address.value_string,
-		&local.sin_addr) != 1) {
+	if (inet_pton(AF_INET, ipv4_addr, &local.sin_addr) != 1) {
 		LOG_ERR("Parse local IP address failed: %d", -errno);
 		return -EINVAL;
 	}
@@ -377,7 +365,7 @@ static int do_bind(uint16_t port)
 
 static int do_connect(const char *url, uint16_t port)
 {
-	int ret;
+	int ret = 0;
 
 	LOG_DBG("%s:%d", log_strdup(url), port);
 
@@ -391,8 +379,16 @@ static int do_connect(const char *url, uint16_t port)
 		return ret;
 	}
 
-	ret = connect(client.sock, (struct sockaddr *)&remote,
-		sizeof(struct sockaddr_in));
+	if (client.sec_tag != INVALID_SEC_TAG) {
+		ret = setsockopt(client.sock, SOL_TLS, TLS_HOSTNAME, url, strlen(url));
+		if (ret < 0) {
+			LOG_ERR("Failed to set TLS_HOSTNAME\n");
+			do_socket_close(-errno);
+			return -errno;
+		}
+	}
+
+	ret = connect(client.sock, (struct sockaddr *)&remote, sizeof(struct sockaddr_in));
 	if (ret < 0) {
 		LOG_ERR("connect() failed: %d", -errno);
 		do_socket_close(-errno);
@@ -400,9 +396,9 @@ static int do_connect(const char *url, uint16_t port)
 	}
 
 	client.connected = true;
-	sprintf(rsp_buf, "#XCONNECT: 1\r\n");
+	sprintf(rsp_buf, "\r\n#XCONNECT: 1\r\n");
 	rsp_send(rsp_buf, strlen(rsp_buf));
-	return 0;
+	return ret;
 }
 
 static int do_listen(void)
@@ -423,28 +419,29 @@ static int do_listen(void)
 
 static int do_accept(void)
 {
-	int ret;
+	int fd;
 	char peer_addr[INET_ADDRSTRLEN];
 	socklen_t len = sizeof(struct sockaddr_in);
 
-	ret = accept(client.sock, (struct sockaddr *)&remote, &len);
-	if (ret < 0) {
-		LOG_ERR("accept() failed: %d/%d", -errno, ret);
+	fd = accept(client.sock, (struct sockaddr *)&remote, &len);
+	if (fd == -1) {
+		LOG_ERR("accept() failed: %d", -errno);
 		do_socket_close(-errno);
 		return -errno;
 	}
 	if (inet_ntop(AF_INET, &remote.sin_addr, peer_addr, INET_ADDRSTRLEN)
 		== NULL) {
 		LOG_WRN("Parse peer IP address failed: %d", -errno);
+		close(fd);
 		return -EINVAL;
 	}
-	sprintf(rsp_buf, "#XACCEPT: connected with %s\r\n",
+	sprintf(rsp_buf, "\r\n#XACCEPT: \"connected with %s\"\r\n",
 		peer_addr);
 	rsp_send(rsp_buf, strlen(rsp_buf));
-	client.sock_peer = ret;
+	client.sock_peer = fd;
 	client.connected = true;
 
-	sprintf(rsp_buf, "#XACCEPT: %d\r\n", client.sock_peer);
+	sprintf(rsp_buf, "\r\n#XACCEPT: %d\r\n", client.sock_peer);
 	rsp_send(rsp_buf, strlen(rsp_buf));
 
 	return 0;
@@ -473,7 +470,7 @@ static int do_send(const uint8_t *data, int datalen)
 			if (errno != EAGAIN && errno != ETIMEDOUT) {
 				do_socket_close(-errno);
 			} else {
-				sprintf(rsp_buf, "#XSOCKET: %d\r\n", -errno);
+				sprintf(rsp_buf, "\r\n#XSOCKET: %d\r\n", -errno);
 				rsp_send(rsp_buf, strlen(rsp_buf));
 			}
 			ret = -errno;
@@ -482,7 +479,7 @@ static int do_send(const uint8_t *data, int datalen)
 		offset += ret;
 	}
 
-	sprintf(rsp_buf, "#XSEND: %d\r\n", offset);
+	sprintf(rsp_buf, "\r\n#XSEND: %d\r\n", offset);
 	rsp_send(rsp_buf, strlen(rsp_buf));
 
 	LOG_DBG("Sent");
@@ -496,7 +493,6 @@ static int do_send(const uint8_t *data, int datalen)
 static int do_recv(uint16_t length)
 {
 	int ret;
-	char data[NET_IPV4_MTU];
 	int sock = client.sock;
 
 	/* For TCP/TLS Server, receive from imcoming socket */
@@ -509,13 +505,13 @@ static int do_recv(uint16_t length)
 		}
 	}
 
-	ret = recv(sock, data, length, 0);
+	ret = recv(sock, (void *)rx_data, length, 0);
 	if (ret < 0) {
 		LOG_WRN("recv() error: %d", -errno);
 		if (errno != EAGAIN && errno != ETIMEDOUT) {
 			do_socket_close(-errno);
 		} else {
-			sprintf(rsp_buf, "#XSOCKET: %d\r\n", -errno);
+			sprintf(rsp_buf, "\r\n#XSOCKET: %d\r\n", -errno);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
 		return -errno;
@@ -530,24 +526,22 @@ static int do_recv(uint16_t length)
 	if (ret == 0) {
 		LOG_WRN("recv() return 0");
 	}
-	if (slm_util_hex_check(data, ret)) {
+	if (slm_util_hex_check(rx_data, ret)) {
 		char data_hex[ret * 2];
 		int size = ret * 2;
 
-		ret = slm_util_htoa(data, ret, data_hex, size);
+		ret = slm_util_htoa(rx_data, ret, data_hex, size);
 		if (ret > 0) {
 			rsp_send(data_hex, ret);
-			sprintf(rsp_buf, "\r\n#XRECV: %d, %d\r\n",
-				DATATYPE_HEXADECIMAL, ret);
+			sprintf(rsp_buf, "\r\n#XRECV: %d,%d\r\n", DATATYPE_HEXADECIMAL, ret);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			ret = 0;
 		} else {
 			LOG_ERR("hex convert error: %d", ret);
 		}
 	} else {
-		rsp_send(data, ret);
-		sprintf(rsp_buf, "\r\n#XRECV: %d, %d\r\n",
-			DATATYPE_PLAINTEXT, ret);
+		rsp_send(rx_data, ret);
+		sprintf(rsp_buf, "\r\n#XRECV: %d,%d\r\n", DATATYPE_PLAINTEXT, ret);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		ret = 0;
 	}
@@ -595,7 +589,7 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 			if (errno != EAGAIN && errno != ETIMEDOUT) {
 				do_socket_close(-errno);
 			} else {
-				sprintf(rsp_buf, "#XSOCKET: %d\r\n", -errno);
+				sprintf(rsp_buf, "\r\n#XSOCKET: %d\r\n", -errno);
 				rsp_send(rsp_buf, strlen(rsp_buf));
 			}
 			ret = -errno;
@@ -604,7 +598,7 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 		offset += ret;
 	}
 
-	sprintf(rsp_buf, "#XSENDTO: %d\r\n", offset);
+	sprintf(rsp_buf, "\r\n#XSENDTO: %d\r\n", offset);
 	rsp_send(rsp_buf, strlen(rsp_buf));
 
 	LOG_DBG("UDP sent");
@@ -618,15 +612,17 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 static int do_recvfrom(uint16_t length)
 {
 	int ret;
-	char data[NET_IPV4_MTU];
+	/* Below two are not used, just for static code analysis */
+	struct sockaddr src_addr;
+	socklen_t addrlen = sizeof(struct sockaddr);
 
-	ret = recvfrom(client.sock, data, length, 0, NULL, NULL);
+	ret = recvfrom(client.sock, (void *)rx_data, length, 0, &src_addr, &addrlen);
 	if (ret < 0) {
 		LOG_ERR("recvfrom() error: %d", -errno);
 		if (errno != EAGAIN && errno != ETIMEDOUT) {
 			do_socket_close(-errno);
 		} else {
-			sprintf(rsp_buf, "#XSOCKET: %d\r\n", -errno);
+			sprintf(rsp_buf, "\r\n#XSOCKET: %d\r\n", -errno);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
 		return -errno;
@@ -636,30 +632,28 @@ static int do_recvfrom(uint16_t length)
 	 * datagrams. When such a datagram is received, the return
 	 * value is 0. Treat as normal case
 	 */
-	if (slm_util_hex_check(data, ret)) {
+	if (slm_util_hex_check(rx_data, ret)) {
 		char data_hex[ret * 2];
 		int size = ret * 2;
 
-		ret = slm_util_htoa(data, ret, data_hex, size);
+		ret = slm_util_htoa(rx_data, ret, data_hex, size);
 		if (ret > 0) {
 			rsp_send(data_hex, ret);
-			sprintf(rsp_buf, "\r\n#XRECVFROM: %d, %d\r\n",
-				DATATYPE_HEXADECIMAL, ret);
+			sprintf(rsp_buf, "\r\n#XRECVFROM: %d,%d\r\n", DATATYPE_HEXADECIMAL, ret);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			ret = 0;
 		} else {
 			LOG_ERR("hex convert error: %d", ret);
 		}
 	} else {
-		rsp_send(data, ret);
-		sprintf(rsp_buf, "\r\n#XRECVFROM: %d, %d\r\n",
-			DATATYPE_PLAINTEXT, ret);
+		rsp_send(rx_data, ret);
+		sprintf(rsp_buf, "\r\n#XRECVFROM: %d,%d\r\n", DATATYPE_PLAINTEXT, ret);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		ret = 0;
 	}
 
 	LOG_DBG("UDP received");
-	return 0;
+	return ret;
 }
 
 /**@brief handle AT#XSOCKET commands
@@ -667,7 +661,7 @@ static int do_recvfrom(uint16_t length)
  *  AT#XSOCKET?
  *  AT#XSOCKET=?
  */
-static int handle_at_socket(enum at_cmd_type cmd_type)
+int handle_at_socket(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t op;
@@ -675,30 +669,25 @@ static int handle_at_socket(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) < 2) {
-			return -EINVAL;
-		}
-		err = at_params_short_get(&at_param_list, 1, &op);
+		err = at_params_unsigned_short_get(&at_param_list, 1, &op);
 		if (err) {
 			return err;
 		}
 		if (op == AT_SOCKET_OPEN) {
 			uint16_t type;
-			sec_tag_t sec_tag = INVALID_SEC_TAG;
+			sec_tag_t sec_tag;
 
-			if (at_params_valid_count_get(&at_param_list) < 4) {
-				return -EINVAL;
-			}
-			err = at_params_short_get(&at_param_list, 2, &type);
+			err = at_params_unsigned_short_get(&at_param_list, 2, &type);
 			if (err) {
 				return err;
 			}
-			err = at_params_short_get(&at_param_list, 3, &role);
+			err = at_params_unsigned_short_get(&at_param_list, 3, &role);
 			if (err) {
 				return err;
 			}
-			if (at_params_valid_count_get(&at_param_list) > 4) {
-				at_params_int_get(&at_param_list, 4, &sec_tag);
+			err = at_params_unsigned_int_get(&at_param_list, 4, &sec_tag);
+			if (err) {
+				sec_tag = INVALID_SEC_TAG;
 			}
 			if (client.sock > 0) {
 				LOG_WRN("Socket is already opened");
@@ -717,22 +706,22 @@ static int handle_at_socket(enum at_cmd_type cmd_type)
 
 	case AT_CMD_TYPE_READ_COMMAND:
 		if (client.sock != INVALID_SOCKET) {
-			sprintf(rsp_buf, "#XSOCKET: %d, %d, %d\r\n",
+			sprintf(rsp_buf, "\r\n#XSOCKET: %d,%d,%d\r\n",
 				client.sock, client.ip_proto, client.role);
 		} else {
-			sprintf(rsp_buf, "#XSOCKET: 0\r\n");
+			sprintf(rsp_buf, "\r\n#XSOCKET: 0\r\n");
 		}
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
 		break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "#XSOCKET: (%d, %d), (%d, %d), (%d, %d)",
+		sprintf(rsp_buf, "\r\n#XSOCKET: (%d,%d),(%d,%d),(%d,%d)",
 			AT_SOCKET_CLOSE, AT_SOCKET_OPEN,
 			SOCK_STREAM, SOCK_DGRAM,
 			AT_SOCKET_ROLE_CLIENT, AT_SOCKET_ROLE_SERVER);
 		rsp_send(rsp_buf, strlen(rsp_buf));
-		sprintf(rsp_buf, ", <sec-tag>\r\n");
+		sprintf(rsp_buf, "\r\n,<sec-tag>\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
 		break;
@@ -749,7 +738,7 @@ static int handle_at_socket(enum at_cmd_type cmd_type)
  *  AT#XSOCKETOPT? READ command not supported
  *  AT#XSOCKETOPT=? TEST command not supported
  */
-static int handle_at_socketopt(enum at_cmd_type cmd_type)
+int handle_at_socketopt(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t op;
@@ -765,23 +754,17 @@ static int handle_at_socketopt(enum at_cmd_type cmd_type)
 			LOG_ERR("Invalid role");
 			return err;
 		}
-		if (at_params_valid_count_get(&at_param_list) < 3) {
-			return -EINVAL;
-		}
-		err = at_params_short_get(&at_param_list, 1, &op);
+		err = at_params_unsigned_short_get(&at_param_list, 1, &op);
 		if (err) {
 			return err;
 		}
-		err = at_params_short_get(&at_param_list, 2, &name);
+		err = at_params_unsigned_short_get(&at_param_list, 2, &name);
 		if (err) {
 			return err;
 		}
 		if (op == AT_SOCKETOPT_SET) {
 			int value;
 
-			if (at_params_valid_count_get(&at_param_list) < 4) {
-				return -EINVAL;
-			}
 			err = at_params_int_get(&at_param_list, 3, &value);
 			if (err) {
 				return err;
@@ -792,7 +775,7 @@ static int handle_at_socketopt(enum at_cmd_type cmd_type)
 		} break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "#XSOCKETOPT: (%d, %d), <name>, <value>\r\n",
+		sprintf(rsp_buf, "\r\n#XSOCKETOPT: (%d,%d),<name>,<value>\r\n",
 			AT_SOCKETOPT_GET, AT_SOCKETOPT_SET);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
@@ -810,7 +793,7 @@ static int handle_at_socketopt(enum at_cmd_type cmd_type)
  *  AT#XBIND?
  *  AT#XBIND=? TEST command not supported
  */
-static int handle_at_bind(enum at_cmd_type cmd_type)
+int handle_at_bind(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t port;
@@ -822,14 +805,11 @@ static int handle_at_bind(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) < 2) {
-			return -EINVAL;
-		}
-		err = at_params_short_get(&at_param_list, 1, &port);
+		err = at_params_unsigned_short_get(&at_param_list, 1, &port);
 		if (err < 0) {
 			return err;
 		}
-		err = do_bind(port);
+		err = do_bind((uint16_t)port);
 		break;
 
 	default:
@@ -844,7 +824,7 @@ static int handle_at_bind(enum at_cmd_type cmd_type)
  *  AT#XCONNECT?
  *  AT#XCONNECT=? TEST command not supported
  */
-static int handle_at_connect(enum at_cmd_type cmd_type)
+int handle_at_connect(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	char url[TCPIP_MAX_URL];
@@ -862,26 +842,22 @@ static int handle_at_connect(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) < 3) {
-			return -EINVAL;
-		}
-		err = at_params_string_get(&at_param_list, 1, url, &size);
+		err = util_string_get(&at_param_list, 1, url, &size);
 		if (err) {
 			return err;
 		}
-		url[size] = '\0';
-		err = at_params_short_get(&at_param_list, 2, &port);
+		err = at_params_unsigned_short_get(&at_param_list, 2, &port);
 		if (err) {
 			return err;
 		}
-		err = do_connect(url, port);
+		err = do_connect(url, (uint16_t)port);
 		break;
 
 	case AT_CMD_TYPE_READ_COMMAND:
 		if (client.connected) {
-			sprintf(rsp_buf, "+XCONNECT: 1\r\n");
+			sprintf(rsp_buf, "\r\n+XCONNECT: 1\r\n");
 		} else {
-			sprintf(rsp_buf, "+XCONNECT: 0\r\n");
+			sprintf(rsp_buf, "\r\n+XCONNECT: 0\r\n");
 		}
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
@@ -899,7 +875,7 @@ static int handle_at_connect(enum at_cmd_type cmd_type)
  *  AT#XLISTEN? READ command not supported
  *  AT#XLISTEN=? TEST command not supported
  */
-static int handle_at_listen(enum at_cmd_type cmd_type)
+int handle_at_listen(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 
@@ -934,7 +910,7 @@ static int handle_at_listen(enum at_cmd_type cmd_type)
  *  AT#XACCEPT? READ command not supported
  *  AT#XACCEPT=? TEST command not supported
  */
-static int handle_at_accept(enum at_cmd_type cmd_type)
+int handle_at_accept(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 
@@ -959,10 +935,10 @@ static int handle_at_accept(enum at_cmd_type cmd_type)
 
 	case AT_CMD_TYPE_READ_COMMAND:
 		if (client.sock_peer != INVALID_SOCKET) {
-			sprintf(rsp_buf, "#XTCPACCEPT: %d\r\n",
+			sprintf(rsp_buf, "\r\n#XTCPACCEPT: %d\r\n",
 				client.sock_peer);
 		} else {
-			sprintf(rsp_buf, "#XTCPACCEPT: 0\r\n");
+			sprintf(rsp_buf, "\r\n#XTCPACCEPT: 0\r\n");
 		}
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
@@ -980,7 +956,7 @@ static int handle_at_accept(enum at_cmd_type cmd_type)
  *  AT#XSEND? READ command not supported
  *  AT#XSEND=? TEST command not supported
  */
-static int handle_at_send(enum at_cmd_type cmd_type)
+int handle_at_send(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t datatype;
@@ -994,14 +970,11 @@ static int handle_at_send(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) < 3) {
-			return -EINVAL;
-		}
-		err = at_params_short_get(&at_param_list, 1, &datatype);
+		err = at_params_unsigned_short_get(&at_param_list, 1, &datatype);
 		if (err) {
 			return err;
 		}
-		err = at_params_string_get(&at_param_list, 2, data, &size);
+		err = util_string_get(&at_param_list, 2, data, &size);
 		if (err) {
 			return err;
 		}
@@ -1029,10 +1002,10 @@ static int handle_at_send(enum at_cmd_type cmd_type)
  *  AT#XRECV? READ command not supported
  *  AT#XRECV=? TEST command not supported
  */
-static int handle_at_recv(enum at_cmd_type cmd_type)
+int handle_at_recv(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
-	uint16_t length = NET_IPV4_MTU;
+	int16_t length;
 
 	if (!client.connected) {
 		LOG_ERR("Not connected yet");
@@ -1041,11 +1014,9 @@ static int handle_at_recv(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) > 1) {
-			err = at_params_short_get(&at_param_list, 1, &length);
-			if (err) {
-				return err;
-			}
+		err = at_params_unsigned_short_get(&at_param_list, 1, &length);
+		if (err) {
+			length = CONFIG_SLM_SOCKET_RX_MAX;
 		}
 		err = do_recv(length);
 		break;
@@ -1062,14 +1033,14 @@ static int handle_at_recv(enum at_cmd_type cmd_type)
  *  AT#XSENDTO? READ command not supported
  *  AT#XSENDTO=? TEST command not supported
  */
-static int handle_at_sendto(enum at_cmd_type cmd_type)
+int handle_at_sendto(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	char url[TCPIP_MAX_URL];
+	int size = TCPIP_MAX_URL;
 	uint16_t port;
 	uint16_t datatype;
 	char data[NET_IPV4_MTU];
-	int size;
 
 	if (client.sock < 0) {
 		LOG_ERR("Socket not opened yet");
@@ -1083,25 +1054,20 @@ static int handle_at_sendto(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) < 5) {
-			return -EINVAL;
-		}
-		size = TCPIP_MAX_URL;
-		err = at_params_string_get(&at_param_list, 1, url, &size);
+		err = util_string_get(&at_param_list, 1, url, &size);
 		if (err) {
 			return err;
 		}
-		url[size] = '\0';
-		err = at_params_short_get(&at_param_list, 2, &port);
+		err = at_params_unsigned_short_get(&at_param_list, 2, &port);
 		if (err) {
 			return err;
 		}
-		err = at_params_short_get(&at_param_list, 3, &datatype);
+		err = at_params_unsigned_short_get(&at_param_list, 3, &datatype);
 		if (err) {
 			return err;
 		}
 		size = NET_IPV4_MTU;
-		err = at_params_string_get(&at_param_list, 4, data, &size);
+		err = util_string_get(&at_param_list, 4, data, &size);
 		if (err) {
 			return err;
 		}
@@ -1113,7 +1079,7 @@ static int handle_at_sendto(enum at_cmd_type cmd_type)
 				err = do_sendto(url, port, data_hex, err);
 			}
 		} else {
-			err = do_sendto(url, port, data, size);
+			err = do_sendto(url, (uint16_t)port, data, size);
 		}
 		break;
 
@@ -1129,10 +1095,10 @@ static int handle_at_sendto(enum at_cmd_type cmd_type)
  *  AT#XRECVFROM? READ command not supported
  *  AT#XRECVFROM=? TEST command not supported
  */
-static int handle_at_recvfrom(enum at_cmd_type cmd_type)
+int handle_at_recvfrom(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
-	uint16_t length = NET_IPV4_MTU;
+	uint16_t length;
 
 	if (client.sock < 0) {
 		LOG_ERR("Socket not opened yet");
@@ -1146,11 +1112,9 @@ static int handle_at_recvfrom(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) > 1) {
-			err = at_params_short_get(&at_param_list, 1, &length);
-			if (err) {
-				return err;
-			}
+		err = at_params_unsigned_short_get(&at_param_list, 1, &length);
+		if (err) {
+			length = CONFIG_SLM_SOCKET_RX_MAX;
 		}
 		err = do_recvfrom(length);
 		break;
@@ -1167,7 +1131,7 @@ static int handle_at_recvfrom(enum at_cmd_type cmd_type)
  *  AT#XGETADDRINFO? READ command not supported
  *  AT#XGETADDRINFO=? TEST command not supported
  */
-static int handle_at_getaddrinfo(enum at_cmd_type cmd_type)
+int handle_at_getaddrinfo(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	char url[TCPIP_MAX_URL];
@@ -1181,27 +1145,21 @@ static int handle_at_getaddrinfo(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		if (at_params_valid_count_get(&at_param_list) < 2) {
-			return -EINVAL;
-		}
-		err = at_params_string_get(&at_param_list, 1, url, &size);
+		err = util_string_get(&at_param_list, 1, url, &size);
 		if (err) {
 			return err;
 		}
-		url[size] = '\0';
 		if (check_for_ipv4(url, strlen(url))) {
 			LOG_ERR("already IPv4 address");
 			return -EINVAL;
 		}
 		err = getaddrinfo(url, NULL, &hints, &result);
 		if (err) {
-			LOG_ERR("getaddrinfo() failed %d", err);
-			sprintf(rsp_buf, "#XGETADDRINFO: %d\r\n", -err);
+			sprintf(rsp_buf, "\r\n#XGETADDRINFO: %d\r\n", -err);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			return err;
 		} else if (result == NULL) {
-			LOG_ERR("Address not found\n");
-			sprintf(rsp_buf, "#XGETADDRINFO: not found\r\n");
+			sprintf(rsp_buf, "\r\n#XGETADDRINFO: \"not found\"\r\n");
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			return -ENOENT;
 		}
@@ -1209,7 +1167,7 @@ static int handle_at_getaddrinfo(enum at_cmd_type cmd_type)
 		host = (struct sockaddr_in *)result->ai_addr;
 		inet_ntop(AF_INET, &(host->sin_addr.s_addr),
 			ipv4addr, sizeof(ipv4addr));
-		sprintf(rsp_buf, "#XGETADDRINFO: %s\r\n", ipv4addr);
+		sprintf(rsp_buf, "\r\n#XGETADDRINFO: \"%s\"\r\n", ipv4addr);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		freeaddrinfo(result);
 		break;
@@ -1221,45 +1179,12 @@ static int handle_at_getaddrinfo(enum at_cmd_type cmd_type)
 	return err;
 }
 
-/**@brief API to handle TCP/IP AT commands
- */
-int slm_at_tcpip_parse(const char *at_cmd)
-{
-	int ret = -ENOENT;
-	enum at_cmd_type type;
-
-	for (int i = 0; i < AT_TCPIP_MAX; i++) {
-		if (slm_util_cmd_casecmp(at_cmd, m_tcpip_at_list[i].string)) {
-			ret = at_parser_params_from_str(at_cmd, NULL,
-						&at_param_list);
-			if (ret) {
-				LOG_ERR("Failed to parse AT command %d", ret);
-				return -EINVAL;
-			}
-			type = at_parser_cmd_type_get(at_cmd);
-			ret = m_tcpip_at_list[i].handler(type);
-			break;
-		}
-	}
-
-	return ret;
-}
-
-/**@brief API to list TCP/IP AT commands
- */
-void slm_at_tcpip_clac(void)
-{
-	for (int i = 0; i < AT_TCPIP_MAX; i++) {
-		sprintf(rsp_buf, "%s\r\n", m_tcpip_at_list[i].string);
-		rsp_send(rsp_buf, strlen(rsp_buf));
-	}
-}
-
 /**@brief API to initialize TCP/IP AT commands handler
  */
 int slm_at_tcpip_init(void)
 {
 	client.sock = INVALID_SOCKET;
+	client.sec_tag = INVALID_SEC_TAG;
 	client.role = AT_SOCKET_ROLE_CLIENT;
 	client.sock_peer = INVALID_SOCKET;
 	client.connected = false;

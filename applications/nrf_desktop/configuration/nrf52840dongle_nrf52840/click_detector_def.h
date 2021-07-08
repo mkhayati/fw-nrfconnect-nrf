@@ -1,10 +1,10 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
-#include "click_detector.h"
+#include <caf/click_detector.h>
 
 /* This configuration file is included only once from click_detector module
  * and holds information about click detector configuration.

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -26,15 +26,11 @@
 
 #include <logging/log.h>
 
-LOG_MODULE_REGISTER(bt_gatt_lbs, CONFIG_BT_GATT_LBS_LOG_LEVEL);
+LOG_MODULE_REGISTER(bt_lbs, CONFIG_BT_LBS_LOG_LEVEL);
 
 static bool                   notify_enabled;
 static bool                   button_state;
-static struct bt_gatt_lbs_cb       lbs_cb;
-
-#define BT_UUID_LBS           BT_UUID_DECLARE_128(LBS_UUID_SERVICE)
-#define BT_UUID_LBS_BUTTON    BT_UUID_DECLARE_128(LBS_UUID_BUTTON_CHAR)
-#define BT_UUID_LBS_LED       BT_UUID_DECLARE_128(LBS_UUID_LED_CHAR)
+static struct bt_lbs_cb       lbs_cb;
 
 static void lbslc_ccc_cfg_changed(const struct bt_gatt_attr *attr,
 				  uint16_t value)
@@ -47,7 +43,8 @@ static ssize_t write_led(struct bt_conn *conn,
 			 const void *buf,
 			 uint16_t len, uint16_t offset, uint8_t flags)
 {
-	LOG_DBG("Attribute write, handle: %u, conn: %p", attr->handle, conn);
+	LOG_DBG("Attribute write, handle: %u, conn: %p", attr->handle,
+		(void *)conn);
 
 	if (lbs_cb.led_cb) {
 		lbs_cb.led_cb(*(bool *)buf);
@@ -56,7 +53,7 @@ static ssize_t write_led(struct bt_conn *conn,
 	return len;
 }
 
-#ifdef CONFIG_BT_GATT_LBS_POLL_BUTTON
+#ifdef CONFIG_BT_LBS_POLL_BUTTON
 static ssize_t read_button(struct bt_conn *conn,
 			  const struct bt_gatt_attr *attr,
 			  void *buf,
@@ -65,7 +62,8 @@ static ssize_t read_button(struct bt_conn *conn,
 {
 	const char *value = attr->user_data;
 
-	LOG_DBG("Attribute read, handle: %u, conn: %p", attr->handle, conn);
+	LOG_DBG("Attribute read, handle: %u, conn: %p", attr->handle,
+		(void *)conn);
 
 	if (lbs_cb.button_cb) {
 		button_state = lbs_cb.button_cb();
@@ -80,7 +78,7 @@ static ssize_t read_button(struct bt_conn *conn,
 /* LED Button Service Declaration */
 BT_GATT_SERVICE_DEFINE(lbs_svc,
 BT_GATT_PRIMARY_SERVICE(BT_UUID_LBS),
-#ifdef CONFIG_BT_GATT_LBS_POLL_BUTTON
+#ifdef CONFIG_BT_LBS_POLL_BUTTON
 	BT_GATT_CHARACTERISTIC(BT_UUID_LBS_BUTTON,
 			       BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 			       BT_GATT_PERM_READ, read_button, NULL,
@@ -98,7 +96,7 @@ BT_GATT_PRIMARY_SERVICE(BT_UUID_LBS),
 			       NULL, write_led, NULL),
 );
 
-int bt_gatt_lbs_init(struct bt_gatt_lbs_cb *callbacks)
+int bt_lbs_init(struct bt_lbs_cb *callbacks)
 {
 	if (callbacks) {
 		lbs_cb.led_cb    = callbacks->led_cb;
@@ -108,7 +106,7 @@ int bt_gatt_lbs_init(struct bt_gatt_lbs_cb *callbacks)
 	return 0;
 }
 
-int bt_gatt_lbs_send_button_state(bool button_state)
+int bt_lbs_send_button_state(bool button_state)
 {
 	if (!notify_enabled) {
 		return -EACCES;

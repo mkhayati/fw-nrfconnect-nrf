@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef AT_CMD_H_
@@ -85,7 +85,7 @@ int at_cmd_init(void);
  * @retval -ENOEXEC is returned if the modem returned ERROR.
  * @retval -ENOMEM is returned if allocation of callback worker failed.
  * @retval -EIO is returned if the function failed to send the command.
- * @retval -EHOSTDOWN is returned if bsdlib is shutdown.
+ * @retval -EHOSTDOWN is returned if the Modem library is shutdown.
  */
 int at_cmd_write_with_callback(const char *const cmd,
 					  at_cmd_handler_t  handler);
@@ -124,7 +124,7 @@ int at_cmd_write_with_callback(const char *const cmd,
  * @retval -ENOEXEC is returned if the modem returned ERROR.
  * @retval -EMSGSIZE is returned if the supplied buffer is to small or NULL.
  * @retval -EIO is returned if the function failed to send the command.
- * @retval -EHOSTDOWN is returned if bsdlib is shutdown.
+ * @retval -EHOSTDOWN is returned if the Modem library is shutdown.
  *
  */
 int at_cmd_write(const char *const cmd,

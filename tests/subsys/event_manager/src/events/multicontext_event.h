@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _MULTICONTEXT_EVENT_H_
@@ -36,4 +36,4 @@ EVENT_TYPE_DECLARE(multicontext_event);
  * @}
  */
 
-#endif /* _MULTICONTEXT_H_ */
+#endif /* _MULTICONTEXT_EVENT_H_ */

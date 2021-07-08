@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <ztest.h>
@@ -11,6 +11,15 @@
 
 static enum test_id cur_test_id;
 static K_SEM_DEFINE(test_end_sem, 0, 1);
+
+/* Provide custom assert post action handler to handle the assertion on OOM
+ * error in Event Manager.
+ */
+BUILD_ASSERT(!IS_ENABLED(CONFIG_ASSERT_NO_FILE_INFO));
+void assert_post_action(const char *file, unsigned int line)
+{
+       printk("assert_post_action - file: %s (line: %u)\n", file, line);
+}
 
 void test_init(void)
 {
@@ -22,6 +31,7 @@ static void test_start(enum test_id test_id)
 	cur_test_id = test_id;
 	struct test_start_event *ts = new_test_start_event();
 
+	zassert_not_null(ts, "Failed to allocate event");
 	ts->test_id = test_id;
 	EVENT_SUBMIT(ts);
 

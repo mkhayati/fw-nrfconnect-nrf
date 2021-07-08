@@ -3,7 +3,15 @@
 Thread: CLI
 ###########
 
-The Thread CLI sample demonstrates the usage of OpenThread Command Line Interface inside the Zephyr shell.
+.. contents::
+   :local:
+   :depth: 2
+
+The :ref:`Thread <ug_thread>` CLI sample demonstrates how to send commands to a Thread device using the OpenThread Command Line Interface (CLI).
+The CLI is integrated into the Zephyr shell.
+
+This sample supports optional :ref:`ot_cli_sample_thread_v12`, which can be turned on or off.
+See :ref:`coap_client_sample_activating_variants` for details.
 
 Overview
 ********
@@ -18,31 +26,51 @@ The CLI sample comes with the :ref:`full set of OpenThread functionalities <thre
 If used alone, the sample allows you to test the network status.
 It is recommended to use at least two development kits running the same sample to be able to test communication.
 
-An additional functionality of this particular sample is the possibility of updating OpenThread libraries
-with the version compiled from the current source.
-
-See :ref:`ug_thread_cert` for information on how to use this sample on Thread Certification Test Harness.
-
 .. _ot_cli_sample_diag_module:
 
 Diagnostic module
 =================
 
-By default, the CLI sample comes with the :option:`CONFIG_OPENTHREAD_NORDIC_LIBRARY_MASTER` :ref:`configuration set <thread_ug_feature_sets>` enabled, which allows you to use Zephyr's diagnostic module with its ``diag`` commands.
+By default, the CLI sample comes with the :option:`CONFIG_OPENTHREAD_NORDIC_LIBRARY_MASTER` :ref:`feature set <thread_ug_feature_sets>` enabled, which allows you to use Zephyr's diagnostic module with its ``diag`` commands.
 Use these commands for manually checking hardware-related functionalities without running a Thread network.
 For example, when adding a new functionality or during the manufacturing process to ensure radio communication is working.
 See `Testing diagnostic module`_ section for an example.
 
 .. note::
-    If you disable the :option:`CONFIG_OPENTHREAD_NORDIC_LIBRARY_MASTER` configuration set, you can enable the diagnostic module with the :option:`CONFIG_OPENTHREAD_DIAG` Kconfig option.
+    If you disable the :option:`CONFIG_OPENTHREAD_NORDIC_LIBRARY_MASTER` feature set, you can enable the diagnostic module with the :option:`CONFIG_OPENTHREAD_DIAG` Kconfig option.
 
 .. _ot_cli_sample_thread_v12:
 
-Experimental Thread v1.2 extension
-==================================
+Experimental Thread 1.2 extension
+=================================
 
-This optional extension allows you to test :ref:`available features from Thread Specification v1.2 <thread_ug_thread_1_2>`.
+This optional extension allows you to test :ref:`available features from the Thread 1.2 Specification <thread_ug_thread_1_2>`.
 You can enable these features either by :ref:`activating the overlay extension <ot_cli_sample_activating_variants>` as described below or by setting :ref:`thread_ug_thread_1_2`.
+
+.. _ot_cli_sample_thread_certification:
+
+Certification tests with CLI sample
+===================================
+
+The Thread CLI sample can be used for running certification tests.
+See :ref:`ug_thread_cert` for information on how to use this sample on Thread Certification Test Harness.
+
+.. _ot_cli_sample_minimal:
+
+Minimal configuration
+=====================
+
+This optional extension demonstrates an optimized configuration for the Thread CLI sample.
+The provided configurations optimize the memory footprint of the sample for single protocol and multiprotocol use.
+
+For more information, see :ref:`app_memory`.
+
+FEM support
+===========
+
+.. |fem_file_path| replace:: :file:`samples/openthread/common`
+
+.. include:: /includes/sample_fem_support.txt
 
 Requirements
 ************
@@ -51,14 +79,14 @@ The sample supports the following development kits for testing the network statu
 
 .. table-from-rows:: /includes/sample_board_rows.txt
    :header: heading
-   :rows: nrf52840dk_nrf52840, nrf52833dk_nrf52833
+   :rows: nrf5340dk_nrf5340_cpuapp, nrf52840dk_nrf52840, nrf52833dk_nrf52833, nrf21540dk_nrf52840
 
 Optionally, you can use one or more compatible development kits programmed with this sample or another :ref:`Thread sample <openthread_samples>` for :ref:`testing communication or diagnostics <ot_cli_sample_testing_multiple>` and :ref:`thread_ot_commissioning_configuring_on-mesh`.
 
-Thread v1.2 extension requirements
-==================================
+Thread 1.2 extension requirements
+=================================
 
-If you enable the :ref:`experimental Thread v1.2 extension <ot_cli_sample_thread_v12>`, you will need `nRF Sniffer for 802.15.4 based on nRF52840 with Wireshark`_ to observe messages sent from the router to the leader board when :ref:`testing v1.2 features <ot_cli_sample_testing_multiple_v12>`.
+If you enable the :ref:`ot_cli_sample_thread_v12`, you will need `nRF Sniffer for 802.15.4`_ to observe messages sent from the router to the leader kit when :ref:`ot_cli_sample_testing_multiple_v12`.
 
 User interface
 **************
@@ -85,8 +113,11 @@ Activating sample extensions
 To activate the optional extensions supported by this sample, modify :makevar:`OVERLAY_CONFIG` in the following manner:
 
 * For the experimental Thread 1.2 variant, set :file:`overlay-thread_1_2.conf`.
+* For the minimal single protocol variant, set :file:`overlay-minimal_singleprotocol.conf`.
+* For the minimal multiprotocol variant, set :file:`overlay-minimal_multiprotocol.conf`.
 
 See :ref:`cmake_options` for instructions on how to add this option.
+For more information about using configuration overlay files, see :ref:`zephyr:important-build-vars` in the Zephyr documentation.
 
 Testing
 =======
@@ -100,6 +131,8 @@ After building the sample and programming it to your development kit, test it by
    .. note::
         |thread_hwfc_enabled|
 
+#. .. include:: /includes/thread_configure_network.txt
+#. .. include:: /includes/thread_enable_network.txt
 #. Invoke some of the OpenThread commands:
 
    a. Test the state of the Thread network with the ``ot state`` command.
@@ -108,7 +141,7 @@ After building the sample and programming it to your development kit, test it by
       .. code-block:: console
 
          uart:~$ ot state
-         router
+         leader
          Done
 
    #. Get the Thread network name with the ``ot networkname`` command.
@@ -133,21 +166,18 @@ After building the sample and programming it to your development kit, test it by
 
 .. _ot_cli_sample_testing_multiple:
 
-Testing with more boards
-------------------------
+Testing with more kits
+----------------------
 
-If you are using more than one development kit for testing the CLI sample, you can also complete the following testing procedures:
+If you are using more than one development kit for testing the CLI sample, you can also complete additional testing procedures.
 
-.. contents::
-    :local:
-    :depth: 1
+.. note::
+    The following testing procedures assume you are using two development kits.
 
-The following testing procedures assume you are using two development kits.
+Testing communication between kits
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Testing communication between boards
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To test communication between boards, complete the following steps:
+To test communication between kits, complete the following steps:
 
 #. Make sure both development kits are programmed with the CLI sample.
 #. Turn on the developments kits.
@@ -157,7 +187,15 @@ To test communication between boards, complete the following steps:
    .. note::
         |thread_hwfc_enabled|
 
-#. Test communication between the boards with the ``ot ping <ip_address_of_the_first_board>`` command.
+#. .. include:: /includes/thread_configure_network.txt
+#. .. include:: /includes/thread_enable_network.txt
+#. Test communication between the kits with the following command:
+
+   .. parsed-literal::
+      :class: highlight
+
+      ot ping *ip_address_of_the_first_kit*
+
    For example:
 
    .. code-block:: console
@@ -218,16 +256,18 @@ To test diagnostic commands, complete the following steps:
 
 .. _ot_cli_sample_testing_multiple_v12:
 
-Testing Thread Specification v1.2 features
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Testing Thread 1.2 features
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To test the Thread Specification v1.2 features, complete the following steps:
+To test the Thread 1.2 features, complete the following steps:
 
-#. Make sure both development kits are programmed with the CLI sample with the :ref:`Thread v1.2 extension <ot_cli_sample_thread_v12>` enabled.
+#. Make sure both development kits are programmed with the CLI sample with the :ref:`ot_cli_sample_thread_v12` enabled.
 #. Turn on the developments kits.
 #. Set up the serial connection with both development kits.
    For more details, see :ref:`putty`.
-#. Test the state of the Thread network with the ``ot state`` command to see which board is the leader:
+#. .. include:: /includes/thread_configure_network.txt
+#. .. include:: /includes/thread_enable_network.txt
+#. Test the state of the Thread network with the ``ot state`` command to see which kit is the leader:
 
    .. code-block:: console
 
@@ -235,7 +275,7 @@ To test the Thread Specification v1.2 features, complete the following steps:
       leader
       Done
 
-#. On the leader board, enable the Backbone Router function:
+#. On the leader kit, enable the Backbone Router function:
 
    .. code-block:: console
 
@@ -245,18 +285,18 @@ To test the Thread Specification v1.2 features, complete the following steps:
       I: State changed! Flags: 0x00000200 Current role: 4
       I: State changed! Flags: 0x02000001 Current role: 4
 
-#. On the leader board, configure the Domain prefix:
+#. On the leader kit, configure the Domain prefix:
 
    .. code-block:: console
 
       uart:~$ ot prefix add fd00:7d03:7d03:7d03::/64 prosD med
       Done
-      uart:~$ ot netdataregister
+      uart:~$ ot netdata register
       Done
       I: State changed! Flags: 0x00000200 Current role: 4
       I: State changed! Flags: 0x00001001 Current role: 4
 
-#. On the router board, display the autoconfigured Domain Unicast Address and set another one manually:
+#. On the router kit, display the autoconfigured Domain Unicast Address and set another one manually:
 
    .. code-block:: console
 
@@ -275,7 +315,7 @@ To test the Thread Specification v1.2 features, complete the following steps:
       fe80:0:0:0:acbd:53bf:1461:a861
       Done
 
-#. On the router board, configure a multicast address with a scope greater than realm-local:
+#. On the router kit, configure a multicast address with a scope greater than realm-local:
 
    .. code-block:: console
 
@@ -293,11 +333,132 @@ To test the Thread Specification v1.2 features, complete the following steps:
       ff03:0:0:0:0:0:0:fc
       Done
 
-   The router board will send an ``MLR.req`` message to the leader board (Backbone Router).
-   This can be observed using the `nRF Sniffer for 802.15.4 based on nRF52840 with Wireshark`_.
+   The router kit will send an ``MLR.req`` message and a ``DUA.req`` message to the leader kit (Backbone Router).
+   This can be observed using the `nRF Sniffer for 802.15.4`_.
 
-   .. note::
-        The DUA registration with the Backbone Router is not yet supported.
+#. On the leader kit, list the IPv6 addresses:
+
+   .. code-block:: console
+
+      uart:~$ ot ipaddr
+      fd00:7d03:7d03:7d03:84c9:572d:be24:cbe
+      fdde:ad00:beef:0:0:ff:fe00:fc10
+      fdde:ad00:beef:0:0:ff:fe00:fc38
+      fdde:ad00:beef:0:0:ff:fe00:fc00
+      fdde:ad00:beef:0:0:ff:fe00:7000
+      fdde:ad00:beef:0:a318:bf4f:b9c6:5f7d
+      fe80:0:0:0:10b1:93ea:c0ee:eeb7
+
+   Note down the link-local address.
+   You must use this address when sending Link Metrics commands from the router kit to the leader kit.
+
+   The following steps use the address ``fe80:0:0:0:10b1:93ea:c0ee:eeb7``.
+   Replace it with the link-local address of your leader kit in all commands.
+
+#. Run the following commands on the router kit:
+
+   a. Reattach the router kit as SED with a polling period of 3 seconds:
+
+      .. code-block:: console
+
+         uart:~$ ot pollperiod 3000
+         Done
+         uart:~$ ot mode -
+         Done
+
+   #. Perform a Link Metrics query (Single Probe):
+
+      .. code-block:: console
+
+         uart:~$ ot linkmetrics query fe80:0:0:0:10b1:93ea:c0ee:eeb7 single qmr
+         Done
+         Received Link Metrics Report from: fe80:0:0:0:10b1:93ea:c0ee:eeb7
+         - LQI: 220 (Exponential Moving Average)
+         - Margin: 60 (dB) (Exponential Moving Average)
+         - RSSI: -40 (dBm) (Exponential Moving Average)
+
+   #. Send a Link Metrics Management Request to configure a Forward Tracking Series:
+
+      .. code-block:: console
+
+         uart:~$ ot linkmetrics mgmt fe80:0:0:0:10b1:93ea:c0ee:eeb7 forward 1 dra pqmr
+         Done
+         Received Link Metrics Management Response from: fe80:0:0:0:10b1:93ea:c0ee:eeb7
+         Status: Success
+
+   #. Send an MLE Link Probe message to the peer:
+
+      .. code-block:: console
+
+         uart:~$ ot linkmetrics probe fe80:0:0:0:10b1:93ea:c0ee:eeb7 1 10
+         Done
+
+   #. Perform a Link Metrics query (Forward Tracking Series):
+
+      .. code-block:: console
+
+         uart:~$ ot linkmetrics query fe80:0:0:0:10b1:93ea:c0ee:eeb7 forward 1
+         Done
+         Received Link Metrics Report from: fe80:0:0:0:10b1:93ea:c0ee:eeb7
+         - PDU Counter: 13 (Count/Summation)
+         - LQI: 212 (Exponential Moving Average)
+         - Margin: 60 (dB) (Exponential Moving Average)
+         - RSSI: -40 (dBm) (Exponential Moving Average)
+
+   #. Send a Link Metrics Management Request to register an Enhanced ACK-based Probing:
+
+      .. code-block:: console
+
+         uart:~$ ot linkmetrics mgmt fe80:0:0:0:10b1:93ea:c0ee:eeb7 enhanced-ack register qm
+         Done
+         Received Link Metrics Management Response from: fe80:0:0:0:10b1:93ea:c0ee:eeb7
+         Status: Success
+
+   #. Send a Link Metrics Management Request to clear an Enhanced ACK-based Probing:
+
+      .. code-block:: console
+
+         uart:~$ ot linkmetrics mgmt fe80:0:0:0:10b1:93ea:c0ee:eeb7 enhanced-ack clear
+         Done
+         Received Link Metrics Management Response from: fe80:0:0:0:10b1:93ea:c0ee:eeb7
+         Status: Success
+
+#. Verify the Coordinated Sampled Listening (CSL) functionality.
+
+   The following steps use the address ``fe80:0:0:0:acbd:53bf:1461:a861``.
+   Replace it with the link-local address of your router kit in all commands.
+
+   a. Send an ICMPv6 Echo Request from the leader kit to link-local address of the router kit:
+
+      .. code-block:: console
+
+         uart:~$ ot ping fe80:0:0:0:acbd:53bf:1461:a861
+         16 bytes from fe80:0:0:0:acbd:53bf:1461:a861: icmp_seq=2 hlim=64 time=2494ms
+         1 packets transmitted, 1 packets received. Packet loss = 0.0%. Round-trip min/a
+         Done
+
+      Observe that there is a long latency on the reply of up to 3000 ms.
+      This is due to the indirect transmission mechanism based on data polling.
+
+   #. Enable a CSL Receiver on the router kit (now SED) by configuring a CSL period of 0.5 seconds:
+
+      .. code-block:: console
+
+         uart:~$ ot csl period 3125
+         Done
+
+   #. Send an ICMPv6 Echo Request from the leader kit to the link-local address of the router kit:
+
+      .. code-block:: console
+
+         uart:~$ ot ping fe80:0:0:0:acbd:53bf:1461:a861
+         uart:~$ W: TX_STARTED event will be triggered without delay
+         16 bytes from fe80:0:0:0:acbd:53bf:1461:a861: icmp_seq=3 hlim=64 time=421ms
+         1 packets transmitted, 1 packets received. Packet loss = 0.0%. Round-trip min/a
+         Done
+
+      Observe that the reply latency is reduced to a value below 500 ms.
+      The reduction occurs because the transmission from the leader is performed via CSL, based on the CSL Information Elements sent by the CSL Receiver.
 
 Dependencies
 ************
@@ -309,3 +470,14 @@ This sample uses the following Zephyr libraries:
   * ``include/kernel.h``
 
 * :ref:`zephyr:thread_protocol_interface`
+
+The following dependencies are added by the optional multiprotocol Bluetooth LE extension:
+
+* :ref:`nrfxlib:softdevice_controller`
+* :ref:`nus_service_readme`
+* Zephyr's :ref:`zephyr:bluetooth_api`:
+
+  * ``include/bluetooth/bluetooth.h``
+  * ``include/bluetooth/gatt.h``
+  * ``include/bluetooth/hci.h``
+  * ``include/bluetooth/uuid.h``

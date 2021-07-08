@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -45,6 +45,25 @@ static inline bool is_notification(char chr)
 {
 	if ((chr == AT_STANDARD_NOTIFICATION_PREFIX) ||
 	    (chr == AT_PROP_NOTIFICATION_PREFX)) {
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * @brief Verify that the character is a valid character
+ *
+ * Command strings can only contain alphanemuric characters.
+ *
+ * @param[in] chr Character that should be examined
+ *
+ * @retval true  If character is valid
+ * @retval false If character is not valid
+ */
+static inline bool is_valid_command_char(char chr)
+{
+	if (isalpha((int)chr) || isdigit((int)chr)) {
 		return true;
 	}
 
@@ -242,6 +261,45 @@ static inline bool is_command(const char *str)
 	return false;
 }
 
+/**
+ * @brief Check if a string is a beginning of an AT CLAC response
+ *
+ * This function will check if the string is a CLAC response prefix.
+ * Valid prefixes: AT+ and AT%, except AT%X
+ *
+ * @param[in] str String to examine
+ *
+ * @retval true  If the string is a CLAC response
+ * @retval false Otherwise
+ */
+static bool is_clac(const char *str)
+{
+	/* skip leading <CR><LF>, if any, as check not from index 0 */
+	while (is_lfcr(*str)) {
+		str++;
+	}
+
+	if (strlen(str) < 4) {
+		return false;
+	}
+
+	if ((toupper(str[0]) != 'A') || (toupper(str[1]) != 'T')) {
+		/* Not an AT command */
+		return false;
+	}
+
+	if ((toupper(str[2]) != '+') && (toupper(str[2]) != '%')) {
+		/* Neither AT+ nor AT% */
+		return false;
+	}
+
+	if ((toupper(str[2]) == '%') && (toupper(str[3]) == 'X')) {
+		/* Ignore AT%X to avoid false detect (read resp XCOEX0 etc.) */
+		return false;
+	}
+
+	return true;
+}
 /** @} */
 
 #endif /* AT_UTILS_H__ */

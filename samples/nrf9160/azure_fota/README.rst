@@ -3,6 +3,10 @@
 nRF9160: Azure FOTA
 ###################
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Azure firmware over-the-air (Azure FOTA) sample demonstrates how to perform an over-the-air firmware update of an nRF9160-based device using the :ref:`lib_azure_fota` and :ref:`lib_azure_iot_hub` libraries of |NCS|.
 
 Requirements
@@ -10,9 +14,9 @@ Requirements
 
 The sample supports the following development kits:
 
-.. include:: /includes/boardname_tables/sample_boardnames.txt
-   :start-after: set6_start
-   :end-before: set6_end
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: thingy91_nrf9160ns, nrf9160dk_nrf9160ns
 
 The sample also requires an Azure IoT Hub instance, and optionally an `Azure IoT Hub Device Provisioning Service (DPS)`_ instance, if the device is not already registered with the IoT hub.
 
@@ -60,8 +64,8 @@ Check and configure the following library options that are used by the sample:
 * :option:`CONFIG_AZURE_IOT_HUB_DEVICE_ID` - Specifies the device ID, which is used when connecting to Azure IoT Hub or when DPS is enabled.
 
 .. note::
-   If the :option:`CONFIG_AZURE_IOT_HUB_DEVICE_ID_APP` option is disabled, the device ID must be set in ``prj.conf``.
-   If the :option:`CONFIG_AZURE_IOT_HUB_DEVICE_ID_APP` option is enabled, the device ID must be provided using the :cpp:class:`azure_iot_hub_config` configuration struct in a call to the :cpp:func:`azure_iot_hub_init` function.
+   If the :option:`CONFIG_AZURE_IOT_HUB_DEVICE_ID_APP` option is disabled, the device ID must be set in :file:`prj.conf`.
+   If the :option:`CONFIG_AZURE_IOT_HUB_DEVICE_ID_APP` option is enabled, the device ID must be provided using the :c:struct:`azure_iot_hub_config` configuration struct in a call to the :c:func:`azure_iot_hub_init` function.
 
 Building and running
 ********************
@@ -85,9 +89,9 @@ After programming the sample to your development kit, test it by performing the 
       *** Booting Zephyr OS build v2.3.0-rc1-ncs1-1453-gf41496cd30d5  ***
       Traces enabled
       Azure FOTA sample started
-      Initializing BSDlib
+      Initializing Modem library
       This may take a while if a modem firmware update is pending
-      BSDlib initialized
+      Modem library initialized
       Connecting to LTE network
       AZURE_IOT_HUB_EVT_CONNECTING
       AZURE_IOT_HUB_EVT_CONNECTED
@@ -105,6 +109,7 @@ After programming the sample to your development kit, test it by performing the 
 	{
 	    "firmware": {
 	        "fwVersion": "v0.0.0-dev",
+	        "jobId": "ca186d4b-4171-4209-a49d-700c35567d1d",
 	        "fwLocation": {
 	            "host": "my-storage-account.blob.core.windows.net",
 	            "path": "my-app-update.bin"
@@ -145,15 +150,14 @@ This sample uses the following |NCS| libraries:
 * :ref:`lib_azure_iot_hub`
 * :ref:`lte_lc_readme`
 
-It uses the following `nrfxlib`_ libraries:
+It uses the following `sdk-nrfxlib`_ library:
 
-* :ref:`nrfxlib:bsdlib`
+* :ref:`nrfxlib:nrf_modem`
 
-
-It uses the following Zephyr libraries:
+It uses the following Zephyr library:
 
 * :ref:`MQTT <zephyr:networking_api>`
 
-In addition, it uses the following |NCS| sample:
+In addition, it uses the following sample:
 
 * :ref:`secure_partition_manager`

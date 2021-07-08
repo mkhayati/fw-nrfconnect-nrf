@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -49,13 +49,25 @@ void main(void)
  * that the network core is not started yet. More pins can be added if the
  * network core needs them.
  */
-static int network_gpio_allow(struct device *dev)
+static int network_gpio_allow(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	/* Allow Network MCU to use all GPIOs */
-	for (uint32_t i = 0; i < ARRAY_SIZE(NRF_P0_S->PIN_CNF); i++) {
+	/* When the use of the low frequency crystal oscillator (LFXO) is
+	 * enabled, do not modify the configuration of the pins P0.00 (XL1)
+	 * and P0.01 (XL2), as they need to stay configured with the value
+	 * Peripheral.
+	 */
+	uint32_t start_pin = (IS_ENABLED(CONFIG_SOC_ENABLE_LFXO) ? 2 : 0);
+
+	/* Allow the network core to use all GPIOs. */
+	for (uint32_t i = start_pin; i < P0_PIN_NUM; i++) {
 		NRF_P0_S->PIN_CNF[i] = (GPIO_PIN_CNF_MCUSEL_NetworkMCU <<
+					GPIO_PIN_CNF_MCUSEL_Pos);
+	}
+
+	for (uint32_t i = 0; i < P1_PIN_NUM; i++) {
+		NRF_P1_S->PIN_CNF[i] = (GPIO_PIN_CNF_MCUSEL_NetworkMCU <<
 					GPIO_PIN_CNF_MCUSEL_Pos);
 	}
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <init.h>
@@ -59,7 +59,7 @@ static int callback(const struct download_client_evt *event)
 	return 0;
 }
 
-static int download_shell_init(struct device *d)
+static int download_shell_init(const struct device *d)
 {
 	return download_client_init(&downloader, callback);
 }

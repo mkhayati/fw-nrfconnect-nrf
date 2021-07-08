@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018-2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr/types.h>
@@ -23,7 +23,7 @@
 
 int bt_rand(void *buf, size_t len)
 {
-	static struct device *dev;
+	static const struct device *dev;
 
 	if (unlikely(!dev)) {
 		dev = device_get_binding(DT_LABEL(DT_NODELABEL(rng)));

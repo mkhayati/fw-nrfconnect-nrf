@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -40,6 +40,7 @@ int fs_event_helper_file_write(
 		return -ENOMEM;
 	}
 
+	fs_file_t_init(&file);
 	err = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR);
 	if (err) {
 		return err;

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -13,6 +13,7 @@
 #include <SEGGER_RTT.h>
 #include <profiler.h>
 #include <string.h>
+#include <nrfx.h>
 
 
 /* By default, when there is no shell, all events are profiled. */

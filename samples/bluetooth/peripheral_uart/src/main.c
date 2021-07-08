@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -33,7 +33,7 @@
 #define LOG_MODULE_NAME peripheral_uart
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
-#define STACKSIZE CONFIG_BT_GATT_NUS_THREAD_STACK_SIZE
+#define STACKSIZE CONFIG_BT_NUS_THREAD_STACK_SIZE
 #define PRIORITY 7
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
@@ -47,17 +47,17 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define KEY_PASSKEY_ACCEPT DK_BTN1_MSK
 #define KEY_PASSKEY_REJECT DK_BTN2_MSK
 
-#define UART_BUF_SIZE CONFIG_BT_GATT_NUS_UART_BUFFER_SIZE
+#define UART_BUF_SIZE CONFIG_BT_NUS_UART_BUFFER_SIZE
 #define UART_WAIT_FOR_BUF_DELAY K_MSEC(50)
-#define UART_WAIT_FOR_RX CONFIG_BT_GATT_NUS_UART_RX_WAIT_TIME
+#define UART_WAIT_FOR_RX CONFIG_BT_NUS_UART_RX_WAIT_TIME
 
 static K_SEM_DEFINE(ble_init_ok, 0, 1);
 
 static struct bt_conn *current_conn;
 static struct bt_conn *auth_conn;
 
-static struct device *uart;
-static struct k_delayed_work uart_work;
+static const struct device *uart;
+static struct k_work_delayable uart_work;
 
 struct uart_data_t {
 	void *fifo_reserved;
@@ -74,10 +74,10 @@ static const struct bt_data ad[] = {
 };
 
 static const struct bt_data sd[] = {
-	BT_DATA_BYTES(BT_DATA_UUID128_ALL, NUS_UUID_SERVICE),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_VAL),
 };
 
-static void uart_cb(struct device *dev, struct uart_event *evt, void *user_data)
+static void uart_cb(const struct device *dev, struct uart_event *evt, void *user_data)
 {
 	ARG_UNUSED(dev);
 
@@ -140,8 +140,7 @@ static void uart_cb(struct device *dev, struct uart_event *evt, void *user_data)
 			buf->len = 0;
 		} else {
 			LOG_WRN("Not able to allocate UART receive buffer");
-			k_delayed_work_submit(&uart_work,
-					      UART_WAIT_FOR_BUF_DELAY);
+			k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
 			return;
 		}
 
@@ -200,7 +199,7 @@ static void uart_work_handler(struct k_work *item)
 		buf->len = 0;
 	} else {
 		LOG_WRN("Not able to allocate UART receive buffer");
-		k_delayed_work_submit(&uart_work, UART_WAIT_FOR_BUF_DELAY);
+		k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
 		return;
 	}
 
@@ -224,7 +223,7 @@ static int uart_init(void)
 		return -ENOMEM;
 	}
 
-	k_delayed_work_init(&uart_work, uart_work_handler);
+	k_work_init_delayable(&uart_work, uart_work_handler);
 
 	err = uart_callback_set(uart, uart_cb, NULL);
 	if (err) {
@@ -271,7 +270,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	}
 }
 
-#ifdef CONFIG_BT_GATT_NUS_SECURITY_ENABLED
+#ifdef CONFIG_BT_NUS_SECURITY_ENABLED
 static void security_changed(struct bt_conn *conn, bt_security_t level,
 			     enum bt_security_err err)
 {
@@ -292,12 +291,12 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
 static struct bt_conn_cb conn_callbacks = {
 	.connected    = connected,
 	.disconnected = disconnected,
-#ifdef CONFIG_BT_GATT_NUS_SECURITY_ENABLED
+#ifdef CONFIG_BT_NUS_SECURITY_ENABLED
 	.security_changed = security_changed,
 #endif
 };
 
-#if defined(CONFIG_BT_GATT_NUS_SECURITY_ENABLED)
+#if defined(CONFIG_BT_NUS_SECURITY_ENABLED)
 static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
@@ -422,8 +421,8 @@ static void bt_receive_cb(struct bt_conn *conn, const uint8_t *const data,
 	}
 }
 
-static struct bt_gatt_nus_cb nus_cb = {
-	.received_cb = bt_receive_cb,
+static struct bt_nus_cb nus_cb = {
+	.received = bt_receive_cb,
 };
 
 void error(void)
@@ -440,10 +439,10 @@ static void num_comp_reply(bool accept)
 {
 	if (accept) {
 		bt_conn_auth_passkey_confirm(auth_conn);
-		LOG_INF("Numeric Match, conn %p", auth_conn);
+		LOG_INF("Numeric Match, conn %p", (void *)auth_conn);
 	} else {
 		bt_conn_auth_cancel(auth_conn);
-		LOG_INF("Numeric Reject, conn %p", auth_conn);
+		LOG_INF("Numeric Reject, conn %p", (void *)auth_conn);
 	}
 
 	bt_conn_unref(auth_conn);
@@ -494,7 +493,7 @@ void main(void)
 
 	bt_conn_cb_register(&conn_callbacks);
 
-	if (IS_ENABLED(CONFIG_BT_GATT_NUS_SECURITY_ENABLED)) {
+	if (IS_ENABLED(CONFIG_BT_NUS_SECURITY_ENABLED)) {
 		bt_conn_auth_cb_register(&conn_auth_callbacks);
 	}
 
@@ -511,7 +510,7 @@ void main(void)
 		settings_load();
 	}
 
-	err = bt_gatt_nus_init(&nus_cb);
+	err = bt_nus_init(&nus_cb);
 	if (err) {
 		LOG_ERR("Failed to initialize UART service (err: %d)", err);
 		return;
@@ -541,7 +540,7 @@ void ble_write_thread(void)
 		struct uart_data_t *buf = k_fifo_get(&fifo_uart_rx_data,
 						     K_FOREVER);
 
-		if (bt_gatt_nus_send(NULL, buf->data, buf->len)) {
+		if (bt_nus_send(NULL, buf->data, buf->len)) {
 			LOG_WRN("Failed to send data over BLE connection");
 		}
 

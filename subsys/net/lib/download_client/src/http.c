@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <ctype.h>
@@ -73,7 +73,8 @@ int http_get_request_send(struct download_client *client)
 	 * When using HTTP, we request the whole resource to minimize
 	 * network usage (only one request/response are sent).
 	 */
-	if (client->proto == IPPROTO_TLS_1_2) {
+	if (client->proto == IPPROTO_TLS_1_2
+	   || IS_ENABLED(CONFIG_DOWNLOAD_CLIENT_RANGE_REQUESTS)) {
 		len = snprintf(client->buf,
 			CONFIG_DOWNLOAD_CLIENT_BUF_SIZE,
 			GET_HTTPS_TEMPLATE, file, host, client->progress, off);
@@ -111,7 +112,7 @@ static int http_header_parse(struct download_client *client, size_t *hdr_len)
 	char *p;
 
 	p = strstr(client->buf, "\r\n\r\n");
-	if (!p) {
+	if (!p || p > client->buf + client->offset) {
 		/* Waiting full HTTP header */
 		LOG_DBG("Waiting full header in response");
 		return 1;
@@ -131,7 +132,13 @@ static int http_header_parse(struct download_client *client, size_t *hdr_len)
 
 	p = strstr(client->buf, "http/1.1 206");
 	if (!p) {
-		if (client->proto == IPPROTO_TLS_1_2) {
+		p = strstr(client->buf, "http/1.1 404");
+		if (p) {
+			LOG_ERR("Server response was 404: file not found");
+			return -1;
+		}
+		if (client->proto == IPPROTO_TLS_1_2
+		   || IS_ENABLED(CONFIG_DOWNLOAD_CLIENT_RANGE_REQUESTS)) {
 			LOG_ERR("Server did not honor partial content request");
 			return -1;
 		}
@@ -146,7 +153,8 @@ static int http_header_parse(struct download_client *client, size_t *hdr_len)
 	 * and via "Content-Range" in case of HTTPS with range requests.
 	 */
 	if (client->file_size == 0) {
-		if (client->proto == IPPROTO_TLS_1_2) {
+		if (client->proto == IPPROTO_TLS_1_2
+		   || IS_ENABLED(CONFIG_DOWNLOAD_CLIENT_RANGE_REQUESTS)) {
 			p = strstr(client->buf, "content-range");
 			if (!p) {
 				LOG_ERR("Server did not send "
@@ -244,8 +252,10 @@ int http_parse(struct download_client *client, size_t len)
 	client->progress += MIN(client->offset, len);
 
 	/* Have we received a whole fragment or the whole file? */
-	if ((client->offset < CONFIG_DOWNLOAD_CLIENT_HTTP_FRAG_SIZE) &&
-	    (client->progress != client->file_size)) {
+	if (client->progress != client->file_size &&
+	    client->offset < (client->config.frag_size_override != 0 ?
+			      client->config.frag_size_override :
+			      CONFIG_DOWNLOAD_CLIENT_HTTP_FRAG_SIZE)) {
 		return 1;
 	}
 

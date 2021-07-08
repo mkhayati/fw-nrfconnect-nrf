@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 /**@file
  *
@@ -215,7 +215,9 @@ int cloud_encode_data(const struct cloud_channel_data *channel,
  *
  * @param input Pointer to the cloud data input.
  *
- * @return 0 if the operation was successful, otherwise a (negative) error code.
+ * @retval 0 If successful; data was decoded.
+ * @retval 1 If data was not meant for this decoder; decode elsewhere.
+ * @return   A negative value on error.
  */
 int cloud_decode_command(char const *input);
 

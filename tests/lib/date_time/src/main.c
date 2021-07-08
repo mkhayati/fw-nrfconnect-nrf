@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2020 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
 #include <ztest.h>
 #include <stdio.h>
 #include <string.h>
@@ -219,8 +225,8 @@ static void test_date_time_conversion(void)
 	int64_t date_time_utc_unix = 1596813090000;
 	int64_t date_time_utc_unix_origin = k_uptime_get();
 	int64_t uptime = k_uptime_get();
-	int64_t ts_unix_ms;
-	int64_t ts_expect;
+	int64_t ts_unix_ms = 0;
+	int64_t ts_expect = 0;
 
 	ret = date_time_set(&date_time_dummy);
 	zassert_equal(0, ret, "date_time_set should equal 0");
@@ -231,8 +237,12 @@ static void test_date_time_conversion(void)
 	ts_expect = date_time_utc_unix + k_uptime_get() -
 			date_time_utc_unix_origin;
 
-	zassert_equal(ts_expect, ts_unix_ms,
-		      "ts_unix_ms should equal ts_expect");
+	/* We cannot compare exact conversions given by the date time library due to the fact that
+	 * the comparing values are based on k_uptime_get(). Use range instead and compare agains an
+	 * arbitray "high" delta, just to be sure.
+	 */
+	zassert_within(ts_expect, ts_unix_ms, 500,
+		       "Converted value should be within 500ms of the expected result");
 
 	ret = date_time_timestamp_clear(&ts_unix_ms);
 	zassert_equal(0, ret, "date_time_timestamp_clear should return 0");
@@ -244,7 +254,32 @@ static void test_date_time_conversion(void)
 	ts_expect = date_time_utc_unix_origin + date_time_utc_unix -
 			date_time_utc_unix_origin;
 
-	zassert_equal(ts_expect, uptime, "uptime equal ts_expect");
+	zassert_within(ts_expect, uptime, 500,
+		       "Converted value should be within 500ms of the expected result");
+}
+
+static void test_date_time_validity(void)
+{
+	int ret;
+	struct tm date_time_dummy = {
+		.tm_year = 120,
+		.tm_mon = 7,
+		.tm_mday = 7,
+		.tm_hour = 15,
+		.tm_min = 11,
+		.tm_sec = 30
+	};
+
+	ret = date_time_is_valid();
+	zassert_equal(false, ret, "date_time_is_valid should equal false");
+
+	/** UNIX timestamp equavivalent to tm structure date_time_dummy. */
+	/** Fri Aug 07 2020 15:11:30 UTC. */
+	ret = date_time_set(&date_time_dummy);
+	zassert_equal(0, ret, "date_time_set should equal 0");
+
+	ret = date_time_is_valid();
+	zassert_equal(true, ret, "date_time_is_valid should equal true");
 }
 
 static void test_date_time_setup(void)
@@ -281,6 +316,10 @@ void test_main(void)
 					test_date_time_teardown),
 		ztest_unit_test_setup_teardown(
 					test_date_time_conversion,
+					test_date_time_setup,
+					test_date_time_teardown),
+		ztest_unit_test_setup_teardown(
+					test_date_time_validity,
 					test_date_time_setup,
 					test_date_time_teardown)
 	);

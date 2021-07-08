@@ -3,13 +3,18 @@
 Building and programming a sample application
 #############################################
 
-The recommended way of building and programming an |NCS| sample is to use
-the Nordic Edition of the SEGGER Embedded Studio (SES) IDE.
+.. contents::
+   :local:
+   :depth: 2
+
+The recommended way of building and programming an |NCS| sample is to use the Nordic Edition of the SEGGER Embedded Studio (SES) IDE.
 
 
 .. note::
 
-   See :ref:`precompiled_fw` and :ref:`building_pgming` for information about programming a Thingy:91.
+   For additional information, check the user guide for the hardware platform that you are using.
+   These user guides contain platform-specific instructions for building and programming.
+   For example, see :ref:`ug_nrf5340_building` in the :ref:`ug_nrf5340` user guide for information about programming an nRF5340 DK, or :ref:`precompiled_fw` and :ref:`building_pgming` for information about programming a Thingy:91.
 
 .. _gs_programming_ses:
 
@@ -25,7 +30,12 @@ Complete the following steps to build |NCS| projects with SES after :ref:`instal
    If you have installed the |NCS| using the :ref:`gs_app_tcm`, click :guilabel:`Open IDE` next to the version you installed to start SES.
    If you have installed SES manually, run :file:`bin/emStudio`.
 
-#. Select **File -> Open nRF Connect SDK Project**.
+   .. figure:: images/gs-assistant_tm_installed.png
+      :alt: The Toolchain Manager options after installing the nRF Connect SDK version, cropped
+
+      The Toolchain Manager options after installing the |NCS| version
+
+#. Select :guilabel:`File` > :guilabel:`Open nRF Connect SDK Project`.
 
     .. figure:: images/ses_open.png
        :alt: Open nRF Connect SDK Project menu
@@ -34,13 +44,33 @@ Complete the following steps to build |NCS| projects with SES after :ref:`instal
 
 #. To import a project into SES, you must specify the following information:
 
-   * **CMakeLists.txt** - the location of the :file:`CMakeLists.txt` project file of the sample that you want to work with
-   *  **Board Directory** - the location of the board description of the board for which to build the project
-   *  **Board Name** - the board name (select from the list that is populated based on the board directory)
-   * **Build Directory** - the folder in which to run the build (automatically filled based on the board name, but you can specify a different directory)
-   * **Delete Existing CMakeCache.txt** - select this option to ensure that you are not building with an outdated build cache
+   * :guilabel:`nRF Connect SDK Release` - Select the |NCS| version that you want to work with.
 
-.. build_SES_projimport_open_end
+     The drop-down list contains the current version of all |NCS| installation directories that SES knows about.
+     To add a missing |NCS| installation directory to that list, run ``west zephyr-export`` in the installation repository or define the Zephyr base to point to the directory (see :ref:`setting_up_SES`).
+   * :guilabel:`nRF Connect Toolchain Version` - If you used the Toolchain manager to install the |NCS|, select the version of the toolchain that works with the selected |NCS| version.
+     Otherwise, select NONE and make sure that your SES environment is configured correctly (see :ref:`setting_up_SES`).
+
+     .. note::
+        The drop-down list contains only toolchain versions that are compatible with the selected |NCS| version.
+
+   * :guilabel:`Projects` - Select the project that you want to work with.
+
+     The drop-down list contains a selection of samples and applications from the sdk-nrf and sdk-zephyr repositories.
+     Select any of the checkboxes underneath to add the samples from that area to the drop-down list.
+     To add projects to the drop-down list, for example, your own custom projects, click :guilabel:`...` and select the folder that contains the projects that you want to add.
+   * :guilabel:`Board Name` - Select the board that you want to work with.
+
+     The drop-down list contains the build targets for all Nordic Semiconductor boards that are defined in the sdk-nrf and sdk-zephyr repositories.
+     Select any of the checkboxes underneath to add the build targets from that area to the drop-down list.
+     To add build targets to the drop-down list, for example, targets for your own custom board, click :guilabel:`...` and select the folder that contains the board definitions.
+   * :guilabel:`Build Directory` - Select the folder in which to run the build.
+     The field is filled automatically based on the selected board name, but you can specify a different directory.
+   * :guilabel:`Clean Build Directory` - Select this option to ensure that you are not building with an outdated build cache.
+   * :guilabel:`Extended Settings` - Select this option to display a field where you can specify additional CMake options to be used for building.
+     See :ref:`cmake_options`.
+
+   .. build_SES_projimport_open_end
 
    The following figure shows an example configuration for the Asset Tracker application built for the ``nrf9160dk_nrf9160ns`` build target:
 
@@ -49,12 +79,12 @@ Complete the following steps to build |NCS| projects with SES after :ref:`instal
 
       Opening the Asset Tracker project
 
-.. build_SES_projimport_start
+   .. build_SES_projimport_start
 
-4. Click **OK** to import the project into SES. You can now work with the
+4. Click :guilabel:`OK` to import the project into SES. You can now work with the
    project in the IDE.
 
-.. build_SES_projimport_note_start
+   .. build_SES_projimport_note_start
 
    .. note::
 
@@ -68,7 +98,7 @@ Complete the following steps to build |NCS| projects with SES after :ref:`instal
       SES helps you to identify the source of the issue by providing a text output with detailed information about the error.
       Make sure to click :guilabel:`OK` on the error pop-up message and then inspect the text output in SES.
 
-.. build_SES_projimport_note_end
+   .. build_SES_projimport_note_end
 
 5. Build and program your project.
 
@@ -77,9 +107,10 @@ Complete the following steps to build |NCS| projects with SES after :ref:`instal
    .. imp_note_nrf91_start
 
    .. important::
-      If you are working with an nRF9160 DK, make sure to select the correct controller before you program the application to your board.
+      If you are working with an nRF9160 DK, make sure to select the correct controller before you program the application to your development kit.
 
-      Put the **SW5** switch (marked debug/prog) in the **NRF91** position to program the main controller, or in the **NRF52** position to program the board controller.
+      Set the **SW10** switch (marked debug/prog) in the **NRF91** position to program the main controller, or in the **NRF52** position to program the board controller.
+      In nRF9160 DK v0.9.0 and earlier, the switch is called **SW5**.
       See the `Device programming section in the nRF9160 DK User Guide`_ for more information.
 
    .. imp_note_nrf91_end
@@ -87,18 +118,18 @@ Complete the following steps to build |NCS| projects with SES after :ref:`instal
    To build and program an application:
 
       a. Select your project in the Project Explorer.
-      #. From the menu, select **Build -> Build Solution**.
-      #. When the build completes, you can program the sample to a connected board:
+      #. From the menu, select :guilabel:`Build` > :guilabel:`Build Solution`.
+      #. When the build completes, you can program the sample to a connected development kit:
 
-         * For a single-image application, select **Target -> Download zephyr/zephyr.elf**.
-         * For a multi-image application, select **Target -> Download zephyr/merged.hex**.
+         * For a single-image application, select :guilabel:`Target` > :guilabel:`Download zephyr/zephyr.elf`.
+         * For a multi-image application, select :guilabel:`Target` > :guilabel:`Download zephyr/merged.hex`.
 
       .. note::
-	   Alternatively, choose the **Build and Debug** option.
-	   **Build and Debug** will build the application and program it when
+	   Alternatively, choose the :guilabel:`Build and Debug` option.
+	   :guilabel:`Build and Debug` will build the application and program it when
 	   the build completes.
 
-#. To inspect the details of the code that was programmed and the memory usage, click **Debug -> Go**.
+#. To inspect the details of the code that was programmed and the memory usage, click :guilabel:`Debug` > :guilabel:`Go`.
 
    .. note::
    	In a multi-image build, this allows you to debug the source code of your application only.
@@ -117,6 +148,11 @@ Complete the following steps to build |NCS| projects on the command line after c
 
       If you have installed the |NCS| using the :ref:`gs_app_tcm`, click the down arrow next to the version you installed and select :guilabel:`Open bash`.
 
+      .. figure:: images/gs-assistant_tm_dropdown.png
+         :alt: The Toolchain Manager dropdown menu for the installed nRF Connect SDK version, cropped
+
+         The Toolchain Manager dropdown menu options
+
 #.    Go to the specific sample or application directory.
       For example, to build the :ref:`at_client_sample` sample, run the following command to navigate to the sample directory:
 
@@ -126,19 +162,19 @@ Complete the following steps to build |NCS| projects on the command line after c
 
 
 #.    Build the sample or application using the west command.
-      The development board is specified by the parameter *board_name* in the west command as follows:
+      The build target is specified by the parameter *build_target* in the west command as follows:
 
       .. parsed-literal::
          :class: highlight
 
-         west build -b *board_name*
+         west build -b *build_target*
 
       .. note::
 
-	     To build from a directory other than the sample or application directory, run the west build command with an additional parameter *directory_name*,  specifying the sample or application directory.
+	     To build from a directory other than the application directory, run the west build command with an additional parameter *directory_name*,  specifying the application directory.
 
-      See `Board names <Board names_>`_ for more information on the development boards.
-      To reuse an existing build directory for building another sample or application for another board, pass ``-p=auto`` to ``west build``.
+      See :ref:`gs_programming_board_names` for more information on the supported boards and build targets.
+      To reuse an existing build directory for building another application for another board or build target, pass ``-p=auto`` to ``west build``.
 
       If you want to configure your application, run the following west command:
 
@@ -155,101 +191,26 @@ Complete the following steps to build |NCS| projects on the command line after c
          :start-after: .. imp_note_nrf91_start
          :end-before: .. imp_note_nrf91_end
 
-#.    Connect the development board to your PC using a USB cable.
-#.    Power on the development board.
-#.    Program the sample or application to the board using the following command:
-
-      .. code-block:: console
-
-         west flash
-
-      To fully erase the board before programming the new sample or application, use the command:
+#.    Connect the development kit to your PC using a USB cable.
+#.    Power on the development kit.
+#.    Program the sample or application to the kit using the following command:
 
       .. code-block:: console
 
          west flash --erase
 
-      The ``west flash`` command automatically resets the board and starts the sample or application.
+      This command clears the full flash memory before programming, which is the recommended approach.
+      If the application depends on other flash memory areas (for example, if it uses the :ref:`zephyr:settings_api` partition where bonding information is stored), erasing the full kit before programming ensures that these areas are updated with the new content.
+
+      As an alternative, you can also clear only those flash memory pages that are to be overwritten with the new application.
+      With such approach, the old data in other areas will be retained.
+
+      To erase only the areas of flash memory that are required for programming the new application, use the following command:
+
+      .. code-block:: console
+
+         west flash
+
+      The ``west flash`` command automatically resets the kit and starts the application.
 
 For more information on building and programming using the command line, see the Zephyr documentation on :ref:`zephyr:west-build-flash-debug`.
-
-.. _gs_programming_board_names:
-
-Board names
-***********
-
-The following tables lists all boards and build targets for Nordic Semiconductor's hardware platforms.
-
-Boards included in sdk-zephyr
-=============================
-
-The following boards are defined in the :file:`zephyr/boards/arm/` folder.
-Also see the :ref:`zephyr:boards` section in the Zephyr documentation.
-
-.. _table:
-
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-| Hardware platform | PCA number | Board name                                                      | Build target                          |
-+===================+============+=================================================================+=======================================+
-| nRF52 DK          | PCA10040   | :ref:`nrf52dk_nrf52832 <zephyr:nrf52dk_nrf52832>`               | ``nrf52dk_nrf52832``                  |
-| (nRF52832)        |            +-----------------------------------------------------------------+---------------------------------------+
-|                   |            | :ref:`nrf52dk_nrf52810 <zephyr:nrf52dk_nrf52810>`               | ``nrf52dk_nrf52810``                  |
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-| nRF52833 DK       | PCA10100   | :ref:`nrf52833dk_nrf52833 <zephyr:nrf52833dk_nrf52833>`         | ``nrf52833dk_nrf52833``               |
-|                   |            +-----------------------------------------------------------------+---------------------------------------+
-|                   |            | :ref:`nrf52833dk_nrf52820 <zephyr:nrf52833dk_nrf52820>`         | ``nrf52833dk_nrf52820``               |
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-| nRF52840 DK       | PCA10056   | :ref:`nrf52840dk_nrf52840 <zephyr:nrf52840dk_nrf52840>`         | ``nrf52840dk_nrf52840``               |
-|                   |            +-----------------------------------------------------------------+---------------------------------------+
-|                   |            | :ref:`nrf52840dk_nrf52811 <zephyr:nrf52840dk_nrf52811>`         | ``nrf52840dk_nrf52811``               |
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-| nRF52840 Dongle   | PCA10059   | :ref:`nrf52840dongle_nrf52840 <zephyr:nrf52840dongle_nrf52840>` | ``nrf52840dongle_nrf52840``           |
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-| Thingy:52         | PCA20020   | :ref:`thingy52_nrf52832 <zephyr:thingy52_nrf52832>`             | ``thingy52_nrf52832``                 |
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-| nRF5340 PDK       | PCA10095   | :ref:`nrf5340pdk_nrf5340 <zephyr:nrf5340pdk_nrf5340>`           | ``nrf5340pdk_nrf5340_cpunet``         |
-|                   |            |                                                                 |                                       |
-|                   |            |                                                                 | ``nrf5340pdk_nrf5340_cpuapp``         |
-|                   |            |                                                                 |                                       |
-|                   |            |                                                                 | ``nrf5340pdk_nrf5340_cpuappns``       |
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-| nRF9160 DK        | PCA10090   | :ref:`nrf9160dk_nrf9160 <zephyr:nrf9160dk_nrf9160>`             | ``nrf9160dk_nrf9160``                 |
-|                   |            |                                                                 |                                       |
-|                   |            |                                                                 | ``nrf9160dk_nrf9160ns``               |
-|                   |            +-----------------------------------------------------------------+---------------------------------------+
-|                   |            | :ref:`nrf9160dk_nrf52840 <zephyr:nrf9160dk_nrf52840>`           | ``nrf9160dk_nrf52840``                |
-+-------------------+------------+-----------------------------------------------------------------+---------------------------------------+
-
-
-Boards included in sdk-nrf
-==========================
-
-The following boards are defined in the :file:`nrf/boards/arm/` folder.
-
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+
-| Hardware platform | PCA number | Board name                                               | Build target                          |
-+===================+============+==========================================================+=======================================+
-| nRF Desktop       | PCA20041   | :ref:`nrf52840gmouse_nrf52840 <nrf_desktop>`             | ``nrf52840gmouse_nrf52840``           |
-| Gaming Mouse      |            |                                                          |                                       |
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+
-| nRF Desktop       | PCA20044   | :ref:`nrf52dmouse_nrf52832 <nrf_desktop>`                | ``nrf52dmouse_nrf52832``              |
-| Mouse             |            |                                                          |                                       |
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+
-| nRF Desktop       | PCA20045   | :ref:`nrf52810dmouse_nrf52810 <nrf_desktop>`             | ``nrf52810dmouse_nrf52810``           |
-| Mouse             |            |                                                          |                                       |
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+
-| nRF Desktop       | PCA20037   | :ref:`nrf52kbd_nrf52832 <nrf_desktop>`                   | ``nrf52kbd_nrf52832``                 |
-| Keyboard          |            |                                                          |                                       |
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+
-| nRF Desktop       | PCA10111   | :ref:`nrf52833dongle_nrf52833 <nrf_desktop>`             | ``nrf52833dongle_nrf52833``           |
-| Dongle            |            |                                                          |                                       |
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+
-| nRF Desktop       | PCA10114   | :ref:`nrf52820dongle_nrf52820 <nrf_desktop>`             | ``nrf52820dongle_nrf52820``           |
-| Dongle            |            |                                                          |                                       |
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+
-| Thingy:91         | PCA20035   | :ref:`thingy91_nrf9160 <ug_thingy91>`                    | ``thingy91_nrf9160``                  |
-|                   |            |                                                          |                                       |
-|                   |            |                                                          | ``thingy91_nrf9160ns``                |
-|                   |            +----------------------------------------------------------+---------------------------------------+
-|                   |            | :ref:`thingy91_nrf52840 <ug_thingy91>`                   | ``thingy91_nrf52840``                 |
-+-------------------+------------+----------------------------------------------------------+---------------------------------------+

@@ -3,13 +3,17 @@
 Bluetooth: Central Heart Rate Monitor with Coded PHY
 ####################################################
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Central Heart Rate Monitor with Coded PHY offers similar functionality to the :ref:`zephyr:bluetooth_central_hr` sample from Zephyr.
 However, this sample specifically looks for heart rate monitors using LE Coded PHY.
 
 Overview
 ********
 
-The sample demonstrates a |BLE| Central role functionality by scanning for other |BLE| devices that run a Heart Rate Server with LE Coded PHY support.
+The sample demonstrates a Bluetooth LE Central role functionality by scanning for other Bluetooth LE devices that run a Heart Rate Server with LE Coded PHY support which not available in Zephyr Bluetooth LE Controller (See :ref:`ug_ble_controller` for more information).
 It then establishes a connection to the first Peripheral device in range.
 It can be used together with the :ref:`peripheral_hr_coded` sample.
 
@@ -20,12 +24,12 @@ The sample supports the following development kits:
 
 .. table-from-rows:: /includes/sample_board_rows.txt
    :header: heading
-   :rows: nrf5340pdk_nrf5340_cpuapp_and_cpuappns, nrf52840dongle_nrf52840, nrf52840dk_nrf52840
+   :rows: nrf5340dk_nrf5340_cpuapp_and_cpuappns, nrf52840dongle_nrf52840, nrf52840dk_nrf52840
 
-The sample also requires:
+.. include:: /includes/hci_rpmsg_overlay.txt
 
-* A device running a Heart Rate Server with LE Coded PHY support to connect to.
-  For example, another development kit running the :ref:`peripheral_hr_coded` sample.
+The sample also requires a device running a Heart Rate Server with LE Coded PHY support to connect to.
+For example, another development kit running the :ref:`peripheral_hr_coded` sample.
 
 Building and Running
 ********************
@@ -36,11 +40,11 @@ Building and Running
 Testing
 =======
 
-After programming the sample to your board, you can test it by connecting to another board that runs the :ref:`peripheral_hr_coded`.
+After programming the sample to your development kit, you can test it by connecting to another development kit that runs the :ref:`peripheral_hr_coded`.
 
 1. |connect_terminal_specific|
-#. Reset the board.
-#. Program the other board with the :ref:`peripheral_hr_coded`.
+#. Reset the kit.
+#. Program the other kit with the :ref:`peripheral_hr_coded` sample.
 #. Wait until the Coded advertiser is detected by the Central.
    In the terminal window, check for information similar to the following::
 

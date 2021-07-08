@@ -1,13 +1,18 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <init.h>
 
-#if defined(CONFIG_BSD_LIBRARY) && defined(CONFIG_NET_SOCKETS_OFFLOAD)
+#if defined(CONFIG_NRF_MODEM_LIB) && defined(CONFIG_NET_SOCKETS_OFFLOAD)
+#if defined(CONFIG_POSIX_API)
+#include <posix/unistd.h>
+#include <posix/sys/socket.h>
+#else
 #include <net/socket.h>
+#endif
 #endif
 
 #include <logging/log.h>
@@ -23,10 +28,16 @@ LOG_MODULE_REGISTER(board_nonsecure, CONFIG_BOARD_LOG_LEVEL);
 
 static int thingy91_magpio_configure(void)
 {
-#if defined(CONFIG_BSD_LIBRARY) && defined(CONFIG_NET_SOCKETS_OFFLOAD)
+#if defined(CONFIG_NRF_MODEM_LIB) && defined(CONFIG_NET_SOCKETS_OFFLOAD)
 	int at_socket_fd;
 	int buffer;
 	uint8_t read_buffer[AT_CMD_MAX_READ_LENGTH];
+
+	if (!IS_ENABLED(CONFIG_NRF_MODEM_LIB_SYS_INIT)) {
+		LOG_INF("Modem library is not yet initialized, AT commands not sent");
+		LOG_INF("Configuration of MAGPIO and COEX0 is left to drivers");
+		return 0;
+	}
 
 	at_socket_fd = socket(AF_LTE, SOCK_DGRAM, NPROTO_AT);
 	if (at_socket_fd == -1) {
@@ -87,7 +98,7 @@ static int thingy91_magpio_configure(void)
 	return 0;
 }
 
-static int thingy91_board_init(struct device *dev)
+static int thingy91_board_init(const struct device *dev)
 {
 	int err;
 

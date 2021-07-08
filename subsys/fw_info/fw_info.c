@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include "fw_info.h"
@@ -167,7 +167,7 @@ EXT_API(EXT_API_PROVIDE, struct ext_api_provide_ext_api,
 };
 #endif
 
-static int check_ext_api_requests(struct device *dev)
+static int check_ext_api_requests(const struct device *dev)
 {
 	(void)dev;
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -30,6 +30,12 @@
 #include <nrf_cc310_platform_mutex.h>
 #endif /* CONFIG_NRF_CC310_PLATFORM) */
 
+/* Found in nrfxlib/nrf_security/mbedtls/mbedtls_heap.c
+ * Used for reallocating the heap between suites.
+ */
+extern void _heap_init(void);
+extern void _heap_free(void);
+
 /* Points to either CTR or HMAC drbg random depending on what's compiled in */
 extern int (*drbg_random)(void *, unsigned char *, size_t);
 
@@ -43,6 +49,18 @@ extern int (*drbg_random)(void *, unsigned char *, size_t);
  * @return								0 on success, else an error code.
  */
 int init_drbg(const unsigned char *p_optional_seed, size_t len);
+
+/**@brief Wrapper function for hex2bin that makes sure that the input pointer is valid.
+ *
+ * @details Will return 0 if given param hex is NULL.
+ *
+ * @param hex     The hexadecimal string to convert
+ * @param buf     Address of where to store the binary data
+ * @param buflen  Size of the storage area for binary data
+ *
+ * @return     The length of the binary array, or 0 if an error occurred.
+ */
+size_t hex2bin_safe(const char *hex, uint8_t *buf, size_t buflen);
 
 #if defined(MBEDTLS_CTR_DRBG_C)
 

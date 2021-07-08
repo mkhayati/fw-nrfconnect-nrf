@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -101,6 +101,7 @@ static bool event_handler_final(const struct event_header *eh)
 
 			struct test_end_event *te = new_test_end_event();
 
+			zassert_not_null(te, "Failed to allocate event");
 			te->test_id = cur_test_id;
 			EVENT_SUBMIT(te);
 		}

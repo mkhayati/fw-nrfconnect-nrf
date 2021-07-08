@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <bluetooth/bluetooth.h>
@@ -14,30 +14,18 @@
 
 struct lightness_ctx {
 	struct bt_mesh_lightness_srv lightness_srv;
-	struct k_delayed_work per_work;
+	struct k_work_delayable per_work;
 	uint16_t target_lvl;
 	uint16_t current_lvl;
 	uint32_t time_per;
 	uint16_t rem_time;
 };
 
-/** Configuration server definition */
-static struct bt_mesh_cfg_srv cfg_srv = {
-	.relay = IS_ENABLED(CONFIG_BT_MESH_RELAY),
-	.beacon = BT_MESH_BEACON_ENABLED,
-	.frnd = IS_ENABLED(CONFIG_BT_MESH_FRIEND),
-	.gatt_proxy = IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY),
-	.default_ttl = 7,
-
-	/* 3 transmissions with 20ms interval */
-	.net_transmit = BT_MESH_TRANSMIT(2, 20),
-	.relay_retransmit = BT_MESH_TRANSMIT(2, 20),
-};
-
 /* Set up a repeating delayed work to blink the DK's LEDs when attention is
  * requested.
  */
-static struct k_delayed_work attention_blink_work;
+static struct k_work_delayable attention_blink_work;
+static bool attention;
 
 static void attention_blink(struct k_work *work)
 {
@@ -48,19 +36,25 @@ static void attention_blink(struct k_work *work)
 		BIT(2) | BIT(3),
 		BIT(3) | BIT(0),
 	};
-	dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
-	k_delayed_work_submit(&attention_blink_work, K_MSEC(30));
+
+	if (attention) {
+		dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
+		k_work_reschedule(&attention_blink_work, K_MSEC(30));
+	} else {
+		dk_set_leds(DK_NO_LEDS_MSK);
+	}
 }
 
 static void attention_on(struct bt_mesh_model *mod)
 {
-	k_delayed_work_submit(&attention_blink_work, K_NO_WAIT);
+	attention = true;
+	k_work_reschedule(&attention_blink_work, K_NO_WAIT);
 }
 
 static void attention_off(struct bt_mesh_model *mod)
 {
-	k_delayed_work_cancel(&attention_blink_work);
-	dk_set_leds(DK_NO_LEDS_MSK);
+	/* Will stop rescheduling blink timer */
+	attention = false;
 }
 
 static const struct bt_mesh_health_srv_cb health_srv_cb = {
@@ -78,15 +72,16 @@ static void start_new_light_trans(const struct bt_mesh_lightness_set *set,
 				  struct lightness_ctx *ctx)
 {
 	uint32_t step_cnt = abs(set->lvl - ctx->current_lvl) / PWM_SIZE_STEP;
+	uint32_t time = set->transition ? set->transition->time : 0;
+	uint32_t delay = set->transition ? set->transition->delay : 0;
 
-	k_delayed_work_cancel(&ctx->per_work);
 	ctx->target_lvl = set->lvl;
-	ctx->time_per = (step_cnt ? set->transition->time / step_cnt : 0);
-	ctx->rem_time = set->transition->time + set->transition->delay;
-	k_delayed_work_submit(&ctx->per_work, K_MSEC(set->transition->delay));
+	ctx->time_per = (step_cnt ? time / step_cnt : 0);
+	ctx->rem_time = bt_mesh_model_transition_time(set->transition);
+	k_work_reschedule(&ctx->per_work, K_MSEC(delay));
 
 	printk("New light transition-> Lvl: %d, Time: %d, Delay: %d\n",
-	       set->lvl, set->transition->time, set->transition->delay);
+	       set->lvl, time, delay);
 }
 
 static void periodic_led_work(struct k_work *work)
@@ -106,7 +101,7 @@ static void periodic_led_work(struct k_work *work)
 		l_ctx->current_lvl -= PWM_SIZE_STEP;
 	}
 
-	k_delayed_work_submit(&l_ctx->per_work, K_MSEC(l_ctx->time_per));
+	k_work_reschedule(&l_ctx->per_work, K_MSEC(l_ctx->time_per));
 apply_and_print:
 	lc_pwm_led_set(l_ctx->current_lvl);
 	printk("Current light lvl: %u/65535\n", l_ctx->current_lvl);
@@ -123,7 +118,7 @@ static void light_set(struct bt_mesh_lightness_srv *srv,
 	start_new_light_trans(set, l_ctx);
 	rsp->current = l_ctx->current_lvl;
 	rsp->target = l_ctx->target_lvl;
-	rsp->remaining_time = set->transition->time + set->transition->delay;
+	rsp->remaining_time = bt_mesh_model_transition_time(set->transition);
 }
 
 static void light_get(struct bt_mesh_lightness_srv *srv,
@@ -154,7 +149,7 @@ static struct bt_mesh_light_ctrl_srv light_ctrl_srv =
 static struct bt_mesh_elem elements[] = {
 	BT_MESH_ELEM(1,
 		     BT_MESH_MODEL_LIST(
-			     BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+			     BT_MESH_MODEL_CFG_SRV,
 			     BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 			     BT_MESH_MODEL_LIGHTNESS_SRV(
 					 &my_ctx.lightness_srv)),
@@ -175,8 +170,8 @@ const struct bt_mesh_comp *model_handler_init(void)
 {
 	int err;
 
-	k_delayed_work_init(&attention_blink_work, attention_blink);
-	k_delayed_work_init(&my_ctx.per_work, periodic_led_work);
+	k_work_init_delayable(&attention_blink_work, attention_blink);
+	k_work_init_delayable(&my_ctx.per_work, periodic_led_work);
 
 	err = bt_mesh_light_ctrl_srv_enable(&light_ctrl_srv);
 	if (!err) {

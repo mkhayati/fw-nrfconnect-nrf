@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -19,7 +19,7 @@ LOG_MODULE_REGISTER(buzzer, CONFIG_UI_LOG_LEVEL);
 #define BUZZER_MIN_DUTY_CYCLE_DIV	100
 #define BUZZER_MAX_DUTY_CYCLE_DIV	2
 
-struct device *pwm_dev;
+const struct device *pwm_dev;
 static atomic_t buzzer_enabled;
 
 static uint32_t intensity_to_duty_cycle_divisor(uint8_t intensity)
@@ -62,10 +62,10 @@ static void buzzer_disable(void)
 
 	pwm_out(0, 0);
 
-#ifdef CONFIG_DEVICE_POWER_MANAGEMENT
-	int err = device_set_power_state(pwm_dev,
-					 DEVICE_PM_SUSPEND_STATE,
-					 NULL, NULL);
+#ifdef CONFIG_PM_DEVICE
+	int err = pm_device_state_set(pwm_dev,
+				      PM_DEVICE_STATE_SUSPEND,
+				      NULL, NULL);
 	if (err) {
 		LOG_ERR("PWM disable failed");
 	}
@@ -78,10 +78,10 @@ static int buzzer_enable(void)
 
 	atomic_set(&buzzer_enabled, 1);
 
-#ifdef CONFIG_DEVICE_POWER_MANAGEMENT
-	err = device_set_power_state(pwm_dev,
-					 DEVICE_PM_ACTIVE_STATE,
-					 NULL, NULL);
+#ifdef CONFIG_PM_DEVICE
+	err = pm_device_state_set(pwm_dev,
+				 PM_DEVICE_STATE_ACTIVE,
+				 NULL, NULL);
 	if (err) {
 		LOG_ERR("PWM enable failed");
 		return err;

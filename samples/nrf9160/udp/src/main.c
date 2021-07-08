@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -13,7 +13,7 @@
 
 static int client_fd;
 static struct sockaddr_storage host_addr;
-static struct k_delayed_work server_transmission_work;
+static struct k_work_delayable server_transmission_work;
 
 K_SEM_DEFINE(lte_connected, 0, 1);
 
@@ -34,18 +34,17 @@ static void server_transmission_work_fn(struct k_work *work)
 		return;
 	}
 
-	k_delayed_work_submit(
-			&server_transmission_work,
+	k_work_schedule(&server_transmission_work,
 			K_SECONDS(CONFIG_UDP_DATA_UPLOAD_FREQUENCY_SECONDS));
 }
 
 static void work_init(void)
 {
-	k_delayed_work_init(&server_transmission_work,
-			    server_transmission_work_fn);
+	k_work_init_delayable(&server_transmission_work,
+			      server_transmission_work_fn);
 }
 
-#if defined(CONFIG_BSD_LIBRARY)
+#if defined(CONFIG_NRF_MODEM_LIB)
 static void lte_handler(const struct lte_lc_evt *const evt)
 {
 	switch (evt->type) {
@@ -131,16 +130,32 @@ static int configure_low_power(void)
 	return err;
 }
 
-static void modem_configure(void)
+static void modem_init(void)
 {
 	int err;
 
 	if (IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT)) {
 		/* Do nothing, modem is already configured and LTE connected. */
 	} else {
-		err = lte_lc_init_and_connect_async(lte_handler);
+		err = lte_lc_init();
 		if (err) {
-			printk("Modem configuration, error: %d\n", err);
+			printk("Modem initialization failed, error: %d\n", err);
+			return;
+		}
+	}
+}
+
+static void modem_connect(void)
+{
+	int err;
+
+	if (IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT)) {
+		/* Do nothing, modem is already configured and LTE connected. */
+	} else {
+		err = lte_lc_connect_async(lte_handler);
+		if (err) {
+			printk("Connecting to LTE network failed, error: %d\n",
+			       err);
 			return;
 		}
 	}
@@ -172,6 +187,7 @@ static int server_connect(void)
 	client_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (client_fd < 0) {
 		printk("Failed to create UDP socket: %d\n", errno);
+		err = -errno;
 		goto error;
 	}
 
@@ -198,14 +214,21 @@ void main(void)
 
 	work_init();
 
-#if defined(CONFIG_BSD_LIBRARY)
+#if defined(CONFIG_NRF_MODEM_LIB)
+
+	/* Initialize the modem before calling configure_low_power(). This is
+	 * because the enabling of RAI is dependent on the
+	 * configured network mode which is set during modem initialization.
+	 */
+	modem_init();
+
 	err = configure_low_power();
 	if (err) {
 		printk("Unable to set low power configuration, error: %d\n",
 		       err);
 	}
 
-	modem_configure();
+	modem_connect();
 
 	k_sem_take(&lte_connected, K_FOREVER);
 #endif
@@ -222,5 +245,5 @@ void main(void)
 		return;
 	}
 
-	k_delayed_work_submit(&server_transmission_work, K_NO_WAIT);
+	k_work_schedule(&server_transmission_work, K_NO_WAIT);
 }

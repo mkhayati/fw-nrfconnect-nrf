@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**@file
@@ -86,12 +86,14 @@ enum azure_iot_hub_evt_type {
 	AZURE_IOT_HUB_EVT_FOTA_ERASE_DONE,
 	/** FOTA failed */
 	AZURE_IOT_HUB_EVT_FOTA_ERROR,
+	/** Internal library error */
+	AZURE_IOT_HUB_EVT_ERROR
 };
 
 /** @brief Azure IoT Hub topic type, used to route messages to the correct
  *	   destination.
  */
-enum azure_iot_topic_type {
+enum azure_iot_hub_topic_type {
 	/** Data received on the devicebound topic. */
 	AZURE_IOT_HUB_TOPIC_DEVICEBOUND,
 	/** Event topic used to send event data to Azure IoT Hub. */
@@ -104,14 +106,34 @@ enum azure_iot_topic_type {
 	AZURE_IOT_HUB_TOPIC_TWIN_REQUEST,
 };
 
+/** @brief Property bag structure for key/value string pairs. Per Azure
+ *	   IoT Hub documentation, the key must be defined, while the
+ *	   value can be a string, an empty string or NULL.
+ *
+ *  @note If value is provided as a string, it's the equivalent to "key=value".
+ *	  If the value is an empty string (only null-terminator), it's the
+ *	  equivalent of "key=". If value is NULL, it's the equivalent of
+ *	  "key".
+ */
+struct azure_iot_hub_prop_bag {
+	/** Null-terminated key string. */
+	char *key;
+	/** Null-terminated value string. */
+	char *value;
+};
+
 /** @brief Azure IoT Hub topic data. */
 struct azure_iot_hub_topic_data {
 	/** Topic type. */
-	enum azure_iot_topic_type type;
+	enum azure_iot_hub_topic_type type;
 	/** Pointer to topic name. */
 	char *str;
 	/** Length of topic name. */
 	size_t len;
+	/* Array of property bags. */
+	struct azure_iot_hub_prop_bag *prop_bag;
+	/* Number of property bag elements in the prop_bag array. */
+	size_t prop_bag_count;
 };
 
 /** @brief Azure IoT Hub transmission data. */
@@ -140,8 +162,8 @@ struct azure_iot_hub_data {
 struct azure_iot_hub_method {
 	/** Method name, null-terminated string. */
 	const char *name;
-	/** Method request ID. */
-	uint32_t rid;
+	/** Method request ID, null-terminated string. */
+	char *rid;
 	/** Method payload. */
 	const char *payload;
 	/** Method payload length. */
@@ -156,8 +178,8 @@ struct azure_iot_hub_method {
  *	     cloud with success or failure).
  */
 struct azure_iot_hub_result {
-	/** Request ID to which the result belongs. */
-	uint32_t rid;
+	/** Request ID to which the result belongs, null-terminated string. */
+	char *rid;
 	/** Status code. */
 	uint32_t status;
 	/** Result payload. */
@@ -208,7 +230,7 @@ struct azure_iot_hub_config {
  *           successfully for subsequent calls to this library to succeed.
  *
  *  @param[in] config Pointer to struct containing connection parameters. Can be
- *		      NULL if CONFIG_AZURE_IOT_HUB_DEVICE_ID is set.
+ *		      NULL if @option{CONFIG_AZURE_IOT_HUB_DEVICE_ID} is set.
  *  @param[in] event_handler Pointer to event handler function.
  *
  *  @retval 0 If successful. Otherwise, a (negative) error code is returned.
@@ -280,8 +302,9 @@ int azure_iot_hub_method_respond(struct azure_iot_hub_result *result);
  *	   automatically by the library.
  *
  *  @return Time in milliseconds until next keepalive ping will be sent.
+ *  @return -1 if keepalive messages are not enabled.
  */
-uint32_t azure_iot_hub_keepalive_time_left(void);
+int azure_iot_hub_keepalive_time_left(void);
 
 #ifdef __cplusplus
 }

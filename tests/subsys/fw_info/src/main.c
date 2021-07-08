@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <ztest.h>
@@ -9,7 +9,7 @@
 #include <fw_info.h>
 #include <pm_config.h>
 #include <drivers/flash.h>
-#include <power/reboot.h>
+#include <sys/reboot.h>
 
 #define S1_ADDRESS PM_S1_ADDRESS
 #define S1_SIZE 0x8000
@@ -33,8 +33,7 @@ void test_fw_info_invalidate(void)
 	const uint32_t zero = 0;
 	int ret;
 
-	struct device *flash_dev = device_get_binding(PM_S0_DEV_NAME);
-	(void) flash_write_protection_set(flash_dev, false);
+	const struct device *flash_dev = device_get_binding(PM_S0_DEV_NAME);
 
 	/* Write a dummy upgrade to S1 */
 	if (!fw_info_check(S1_ADDRESS)) {

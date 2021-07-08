@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2020 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
 #ifndef __OT_COAP_UTILS_H__
 #define __OT_COAP_UTILS_H__
 

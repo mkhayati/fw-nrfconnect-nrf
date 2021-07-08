@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -20,6 +20,7 @@ static void send_event(int a, bool sleep)
 {
 	struct multicontext_event *ev = new_multicontext_event();
 
+	zassert_not_null(ev, "Failed to allocate event");
 	/* For every event both values should be the same -
 	 * used to check if Event Manager sends proper values.
 	 */
@@ -52,7 +53,7 @@ static void thread1_fn(void)
 
 static void thread2_fn(void)
 {
-	k_timer_start(&test_timer, K_MSEC(2), 0);
+	k_timer_start(&test_timer, K_MSEC(2), K_NO_WAIT);
 	send_event(SOURCE_T2, true);
 }
 

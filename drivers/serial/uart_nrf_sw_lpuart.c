@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <drivers/uart.h>
@@ -9,6 +9,8 @@
 #include <hal/nrf_gpio.h>
 #include <hal/nrf_gpiote.h>
 #include <logging/log.h>
+#include <sys/onoff.h>
+#include <drivers/clock_control/nrf_clock_control.h>
 
 LOG_MODULE_REGISTER(lpuart, CONFIG_NRF_SW_LPUART_LOG_LEVEL);
 
@@ -17,7 +19,7 @@ struct lpuart_bidir_gpio {
 	struct gpio_callback callback;
 
 	/* gpio device. */
-	struct device *port;
+	const struct device *port;
 
 	/* pin number - within port. */
 	gpio_pin_t pin;
@@ -42,11 +44,17 @@ enum rx_state {
 	/* RX is in low power, idle state with pin detection armed. */
 	RX_IDLE,
 
+	/* RX request is pending, recevier is in preparation. */
+	RX_PREPARE,
+
 	/* RX is in active state, receiver is running. */
 	RX_ACTIVE,
 
 	/* RX is transitioning to from active idle state. */
 	RX_TO_IDLE,
+
+	/* RX is waiting for a new buffer. */
+	RX_BLOCKED,
 
 	/* RX is transitioning to off state. */
 	RX_TO_OFF,
@@ -73,7 +81,7 @@ struct lpuart_int_driven {
 /* Low power uart structure. */
 struct lpuart_data {
 	/* Physical UART device */
-	struct device *uart;
+	const struct device *uart;
 
 	/* Request pin. */
 	struct lpuart_bidir_gpio req_pin;
@@ -109,6 +117,8 @@ struct lpuart_data {
 	/* Set to true if request has been detected. */
 	bool rx_req;
 
+	struct onoff_client rx_clk_cli;
+
 #if CONFIG_NRF_SW_LPUART_INT_DRIVEN
 	struct lpuart_int_driven int_driven;
 #endif
@@ -128,12 +138,12 @@ struct lpuart_config {
 	struct lpuart_pin_config rdy;
 };
 
-static inline struct lpuart_data *get_dev_data(struct device *dev)
+static inline struct lpuart_data *get_dev_data(const struct device *dev)
 {
 	return dev->data;
 }
 
-static inline const struct lpuart_config *get_dev_config(struct device *dev)
+static inline const struct lpuart_config *get_dev_config(const struct device *dev)
 {
 	return dev->config;
 }
@@ -218,12 +228,54 @@ static void activate_rx(struct lpuart_data *data)
 	data->rx_state = RX_ACTIVE;
 }
 
+static void rx_hfclk_callback(struct onoff_manager *mgr,
+			      struct onoff_client *cli,
+			      uint32_t state, int res)
+{
+	struct lpuart_data *data =
+		CONTAINER_OF(cli, struct lpuart_data, rx_clk_cli);
+
+	__ASSERT_NO_MSG(res >= 0);
+
+	activate_rx(data);
+}
+
+static void rx_hfclk_request(struct lpuart_data *data)
+{
+	struct onoff_manager *mgr =
+		z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
+	int err;
+
+	sys_notify_init_callback(&data->rx_clk_cli.notify, rx_hfclk_callback);
+	err = onoff_request(mgr, &data->rx_clk_cli);
+	__ASSERT_NO_MSG(err >= 0);
+}
+
+static void start_rx_activation(struct lpuart_data *data)
+{
+	data->rx_state = RX_PREPARE;
+
+	if (IS_ENABLED(CONFIG_NRF_SW_LPUART_HFXO_ON_RX)) {
+		rx_hfclk_request(data);
+	} else {
+		activate_rx(data);
+	}
+}
+
 /* Called when end of transfer is detected. It sets response pin to idle and
  * disables RX.
  */
 static void deactivate_rx(struct lpuart_data *data)
 {
 	int err;
+
+	if (IS_ENABLED(CONFIG_NRF_SW_LPUART_HFXO_ON_RX)) {
+		struct onoff_manager *mgr =
+		     z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
+
+		err = onoff_cancel_or_release(mgr, &data->rx_clk_cli);
+		__ASSERT_NO_MSG(err >= 0);
+	}
 
 	ctrl_pin_idle(&data->rdy_pin);
 	if (nrf_gpio_pin_read(data->rdy_pin.nrf_pin)) {
@@ -237,7 +289,7 @@ static void deactivate_rx(struct lpuart_data *data)
 	/* abort rx */
 	data->rx_state = RX_TO_IDLE;
 	err = uart_rx_disable(data->uart);
-	if (err < 0) {
+	if (err < 0 && err != -EFAULT) {
 		LOG_ERR("RX: Failed to disable (err: %d)", err);
 	}
 }
@@ -288,7 +340,7 @@ static void on_rdy_pin_change(struct lpuart_data *data)
 		LOG_DBG("RX: Request detected.");
 		data->rx_req = true;
 		if (data->rx_state == RX_IDLE) {
-			activate_rx(data);
+			start_rx_activation(data);
 		}
 	} else {
 		__ASSERT_NO_MSG(data->rx_state == RX_ACTIVE);
@@ -298,7 +350,7 @@ static void on_rdy_pin_change(struct lpuart_data *data)
 	}
 }
 
-static void gpio_handler(struct device *port,
+static void gpio_handler(const struct device *port,
 			struct gpio_callback *cb,
 			gpio_port_pins_t pins)
 {
@@ -366,7 +418,7 @@ static int ctrl_pin_configure(struct lpuart_bidir_gpio *io,
 	return 0;
 }
 
-static int api_callback_set(struct device *dev, uart_callback_t callback,
+static int api_callback_set(const struct device *dev, uart_callback_t callback,
 			    void *user_data)
 {
 	struct lpuart_data *data = get_dev_data(dev);
@@ -377,7 +429,7 @@ static int api_callback_set(struct device *dev, uart_callback_t callback,
 	return 0;
 }
 
-static void user_callback(struct device *dev, struct uart_event *evt)
+static void user_callback(const struct device *dev, struct uart_event *evt)
 {
 	const struct lpuart_data *data = get_dev_data(dev);
 
@@ -386,7 +438,7 @@ static void user_callback(struct device *dev, struct uart_event *evt)
 	}
 }
 
-static void uart_callback(struct device *uart, struct uart_event *evt,
+static void uart_callback(const struct device *uart, struct uart_event *evt,
 			  void *user_data)
 {
 	struct device *dev = user_data;
@@ -432,16 +484,18 @@ static void uart_callback(struct device *uart, struct uart_event *evt,
 
 	case UART_RX_DISABLED:
 		LOG_DBG("Rx disabled");
-		__ASSERT_NO_MSG((data->rx_state != RX_ACTIVE) &&
-			 (data->rx_state != RX_IDLE) &&
+		__ASSERT_NO_MSG((data->rx_state != RX_IDLE) &&
 			 (data->rx_state != RX_OFF));
 
 		if (data->rx_state == RX_TO_IDLE) {
+			data->rx_state = RX_BLOCKED;
 			/* Need to request new buffer since uart was disabled */
 			evt->type = UART_RX_BUF_REQUEST;
-		} else if (data->rx_state == RX_TO_OFF) {
+		} else {
+			data->rx_buf = NULL;
 			data->rx_state = RX_OFF;
 		}
+
 		user_callback(dev, evt);
 		break;
 	case UART_RX_STOPPED:
@@ -486,7 +540,7 @@ static void tx_timeout(struct k_timer *timer)
 	}
 }
 
-static int api_tx(struct device *dev, const uint8_t *buf,
+static int api_tx(const struct device *dev, const uint8_t *buf,
 		  size_t len, int32_t timeout)
 {
 	struct lpuart_data *data = get_dev_data(dev);
@@ -504,7 +558,7 @@ static int api_tx(struct device *dev, const uint8_t *buf,
 	return 0;
 }
 
-static int api_tx_abort(struct device *dev)
+static int api_tx_abort(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 	const uint8_t *buf = data->tx_buf;
@@ -543,7 +597,7 @@ static int api_tx_abort(struct device *dev)
 	return err;
 }
 
-static int api_rx_enable(struct device *dev, uint8_t *buf,
+static int api_rx_enable(const struct device *dev, uint8_t *buf,
 			 size_t len, int32_t timeout)
 {
 	struct lpuart_data *data = get_dev_data(dev);
@@ -568,26 +622,26 @@ static int api_rx_enable(struct device *dev, uint8_t *buf,
 	irq_unlock(key);
 
 	if (pending_rx) {
-		activate_rx(data);
+		start_rx_activation(data);
 	}
 
 	return 0;
 }
 
-static int api_rx_buf_rsp(struct device *dev, uint8_t *buf, size_t len)
+static int api_rx_buf_rsp(const struct device *dev, uint8_t *buf, size_t len)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
 	__ASSERT_NO_MSG((data->rx_state != RX_OFF) &&
 		 (data->rx_state != RX_TO_OFF));
 
-	if (data->rx_state == RX_TO_IDLE) {
+	if (data->rx_state == RX_TO_IDLE || data->rx_state == RX_BLOCKED) {
 		data->rx_buf = buf;
 		data->rx_len = len;
 
 		if (data->rx_req) {
 			LOG_DBG("RX: Pending request. Activating RX");
-			activate_rx(data);
+			start_rx_activation(data);
 		} else {
 			data->rx_state = RX_IDLE;
 			LOG_DBG("RX: Idle");
@@ -599,7 +653,7 @@ static int api_rx_buf_rsp(struct device *dev, uint8_t *buf, size_t len)
 	return uart_rx_buf_rsp(data->uart, buf, len);
 }
 
-static int api_rx_disable(struct device *dev)
+static int api_rx_disable(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
@@ -615,7 +669,8 @@ static uint32_t int_driven_rd_available(struct lpuart_data *data)
 	return data->int_driven.rxlen - data->int_driven.rxrd;
 }
 
-static void int_driven_rx_feed(struct device *dev, struct lpuart_data *data)
+static void int_driven_rx_feed(const struct device *dev,
+			       struct lpuart_data *data)
 {
 	int err;
 
@@ -626,7 +681,7 @@ static void int_driven_rx_feed(struct device *dev, struct lpuart_data *data)
 	__ASSERT_NO_MSG(err >= 0);
 }
 
-static void int_driven_evt_handler(struct device *lpuart,
+static void int_driven_evt_handler(const struct device *lpuart,
 				   struct uart_event *evt,
 				   void *user_data)
 {
@@ -671,7 +726,9 @@ static void int_driven_evt_handler(struct device *lpuart,
 	}
 }
 
-static int api_fifo_read(struct device *dev, uint8_t *rx_data, const int size)
+static int api_fifo_read(const struct device *dev,
+			 uint8_t *rx_data,
+			 const int size)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 	uint32_t available = int_driven_rd_available(data);
@@ -683,17 +740,14 @@ static int api_fifo_read(struct device *dev, uint8_t *rx_data, const int size)
 		       &data->int_driven.rxbuf[data->int_driven.rxrd],
 		       cpylen);
 		data->int_driven.rxrd += cpylen;
-		if ((data->rx_state == RX_IDLE)
-		    && !int_driven_rd_available(data)) {
-			/* Whole packet read, RX can be re-enabled. */
-			int_driven_rx_feed(dev, data);
-		}
 	}
 
 	return cpylen;
 }
 
-static int api_fifo_fill(struct device *dev, const uint8_t *tx_data, int size)
+static int api_fifo_fill(const struct device *dev,
+			 const uint8_t *tx_data,
+			 int size)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 	int err;
@@ -717,7 +771,7 @@ static int api_fifo_fill(struct device *dev, const uint8_t *tx_data, int size)
 	return size;
 }
 
-static void api_irq_tx_enable(struct device *dev)
+static void api_irq_tx_enable(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
@@ -727,21 +781,21 @@ static void api_irq_tx_enable(struct device *dev)
 	}
 }
 
-static void api_irq_tx_disable(struct device *dev)
+static void api_irq_tx_disable(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
 	data->int_driven.tx_enabled = false;
 }
 
-static int api_irq_tx_ready(struct device *dev)
+static int api_irq_tx_ready(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
 	return data->int_driven.tx_enabled && (data->tx_buf == NULL);
 }
 
-static void api_irq_callback_set(struct device *dev,
+static void api_irq_callback_set(const struct device *dev,
 				 uart_irq_callback_user_data_t cb,
 				 void *user_data)
 {
@@ -751,7 +805,7 @@ static void api_irq_callback_set(struct device *dev,
 	data->int_driven.user_data = user_data;
 }
 
-static void api_irq_rx_enable(struct device *dev)
+static void api_irq_rx_enable(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
@@ -759,55 +813,65 @@ static void api_irq_rx_enable(struct device *dev)
 	if (int_driven_rd_available(data)) {
 		data->int_driven.callback(dev, data->int_driven.user_data);
 	}
+
+	/* If RX was disabled and there were pending data, it may have been
+	 * processed above after re-enabling. If whole data has been processed
+	 * we must feed the buffer back to the uart to allow reception of the
+	 * next packet.
+	 */
+	if (!int_driven_rd_available(data) && data->rx_state == RX_BLOCKED) {
+		/* Whole packet read, RX can be re-enabled. */
+		int_driven_rx_feed(dev, data);
+	}
 }
 
-static void api_irq_rx_disable(struct device *dev)
+static void api_irq_rx_disable(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
 	data->int_driven.rx_enabled = false;
 }
 
-static int api_irq_rx_ready(struct device *dev)
+static int api_irq_rx_ready(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
-	return data->int_driven.rx_enabled &
+	return data->int_driven.rx_enabled &&
 		int_driven_rd_available(get_dev_data(dev));
 }
 
-static int api_irq_tx_complete(struct device *dev)
+static int api_irq_tx_complete(const struct device *dev)
 {
 	return api_irq_tx_ready(dev);
 }
 
-static void api_irq_err_enable(struct device *dev)
+static void api_irq_err_enable(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
 	data->int_driven.err_enabled = true;
 }
 
-static void api_irq_err_disable(struct device *dev)
+static void api_irq_err_disable(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 
 	data->int_driven.err_enabled = false;
 }
 
-static int api_irq_is_pending(struct device *dev)
+static int api_irq_is_pending(const struct device *dev)
 {
 	return api_irq_rx_ready(dev) || api_irq_tx_ready(dev);
 }
 
-static int api_irq_update(struct device *dev)
+static int api_irq_update(const struct device *dev)
 {
 	return 1;
 }
 
 #endif /* CONFIG_NRF_SW_LPUART_INT_DRIVEN */
 
-static int lpuart_init(struct device *dev)
+static int lpuart_init(const struct device *dev)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 	const struct lpuart_config *cfg = get_dev_config(dev);
@@ -829,7 +893,7 @@ static int lpuart_init(struct device *dev)
 	}
 
 	k_timer_init(&data->tx_timer, tx_timeout, NULL);
-	k_timer_user_data_set(&data->tx_timer, dev);
+	k_timer_user_data_set(&data->tx_timer, (void *)dev);
 
 	err = uart_callback_set(data->uart, uart_callback, (void *)dev);
 	if (err < 0) {
@@ -851,7 +915,7 @@ static int lpuart_init(struct device *dev)
 	return err;
 }
 
-static int api_poll_in(struct device *dev, unsigned char *p_char)
+static int api_poll_in(const struct device *dev, unsigned char *p_char)
 {
 #if CONFIG_NRF_SW_LPUART_INT_DRIVEN
 	return api_fifo_read(dev, p_char, 1) ? 0 : -1;
@@ -860,7 +924,7 @@ static int api_poll_in(struct device *dev, unsigned char *p_char)
 #endif
 }
 
-static void api_poll_out(struct device *dev, unsigned char out_char)
+static void api_poll_out(const struct device *dev, unsigned char out_char)
 {
 	struct lpuart_data *data = get_dev_data(dev);
 	bool thread_ctx = !k_is_in_isr() && !k_is_pre_kernel();
@@ -886,7 +950,7 @@ static void api_poll_out(struct device *dev, unsigned char out_char)
 	}
 }
 
-static int api_configure(struct device *dev, const struct uart_config *cfg)
+static int api_configure(const struct device *dev, const struct uart_config *cfg)
 {
 	const struct lpuart_data *data = get_dev_data(dev);
 
@@ -897,7 +961,7 @@ static int api_configure(struct device *dev, const struct uart_config *cfg)
 	return uart_configure(data->uart, cfg);
 }
 
-static int api_config_get(struct device *dev, struct uart_config *cfg)
+static int api_config_get(const struct device *dev, struct uart_config *cfg)
 {
 	const struct lpuart_data *data = get_dev_data(dev);
 
@@ -962,6 +1026,11 @@ static const struct uart_driver_api lpuart_api = {
 #endif
 };
 
-DEVICE_AND_API_INIT(lpuart, "LPUART", lpuart_init, &lpuart_data,
-		    &lpuart_config, POST_KERNEL,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &lpuart_api);
+BUILD_ASSERT(DT_IRQ(DT_PARENT(DT_NODELABEL(lpuart)), priority) ==
+	     DT_IRQ(DT_NODELABEL(gpiote), priority),
+	     "UARTE and GPIOTE interrupt priority must match.");
+
+DEVICE_DT_DEFINE(DT_NODELABEL(lpuart), lpuart_init, NULL,
+	      &lpuart_data, &lpuart_config,
+	      POST_KERNEL, CONFIG_NRF_SW_LPUART_INIT_PRIORITY,
+	      &lpuart_api);

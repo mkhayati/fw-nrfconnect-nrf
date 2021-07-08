@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2020 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menuconfig AZURE_IOT_HUB
@@ -10,6 +10,25 @@ menuconfig AZURE_IOT_HUB
 	select MQTT_LIB_TLS
 
 if AZURE_IOT_HUB
+
+config AZURE_IOT_HUB_SEND_TIMEOUT
+	bool "Send data with socket timeout"
+	default y
+	help
+	  Configures a timeout on the Azure IoT Hub socket to ensure that a call to the send
+	  function will not block indefinitely. To configure the length of the timeout,
+	  use AZURE_IOT_HUB_SEND_TIMEOUT_SEC.
+
+if AZURE_IOT_HUB_SEND_TIMEOUT
+
+config AZURE_IOT_HUB_SEND_TIMEOUT_SEC
+	int "Send timeout"
+	default 60
+	help
+	  Timeout in seconds to use when the Azure IoT Hub socket is configured to
+	  send with a timeout by enabling AZURE_IOT_HUB_SEND_TIMEOUT.
+
+endif
 
 config AZURE_IOT_HUB_HOSTNAME
 	string "Azure IoT Hub hostname"
@@ -33,10 +52,6 @@ config AZURE_IOT_HUB_SEC_TAG
 config AZURE_IOT_HUB_PORT
 	int "Azure IoT Hub port"
 	default 8883
-
-config AZURE_IOT_HUB_TLS_SESSION_CACHING
-	bool "Enable TLS session caching"
-	default y
 
 config AZURE_IOT_HUB_MQTT_RX_TX_BUFFER_LEN
 	int "Buffer sizes for the MQTT library"
@@ -70,6 +85,42 @@ config AZURE_IOT_HUB_STACK_SIZE
 config AZURE_IOT_HUB_AUTO_DEVICE_TWIN_REQUEST
 	bool "Request device twin automatically when connected"
 	default y
+
+config AZURE_IOT_HUB_TOPIC_MAX_LEN
+	int "Max length of topic"
+	default 100
+	help
+	  Sets the maximum length of a topic. If a user plans to make extensive
+	  use of property bags, it should be considered to increase this value
+	  to fit the topic into the allocated buffers.
+
+config AZURE_IOT_HUB_TOPIC_ELEMENT_MAX_LEN
+	int "Maximum length of topic element strings"
+	default 40
+	help
+	  Azure IoT Hub uses dynamically constructed topics to transfer
+	  information elements such as response codes, direct method names and
+	  property bag keys and values.
+	  This option configures the maximum length of such an element.
+	  Note that all values are also represented as strings, regardless
+	  of their content, so a boolean or a number will require its length as
+	  a string, and not the size of its binary representation.
+
+config AZURE_IOT_HUB_PROPERTY_BAG_MAX_COUNT
+	int "Maximum number of property bag elements"
+	default 2
+	help
+	  The maximum number of property bags that can be parsed from a topic.
+	  Increasing this value will increase stack usage when parsing topics,
+	  and vice versa if decreasing it.
+
+config AZURE_IOT_HUB_TOPIC_PROPERTY_BAG_PREFIX
+	bool "Include the '?' prefix before the property bag key/value"
+	default y
+	help
+	  This option adds a '?' before the property bag value for the event
+	  topics. Example
+	  devices/{device_id}/messages/events/?{property_bag}.
 
 config AZURE_IOT_HUB_DPS
 	bool "Use Device Provisioning Service"

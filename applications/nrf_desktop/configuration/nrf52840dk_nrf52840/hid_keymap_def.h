@@ -1,11 +1,11 @@
 /*
  * Copyright (c) 2018-2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include "hid_keymap.h"
-#include "key_id.h"
+#include <caf/key_id.h>
 
 /* This configuration file is included only once from hid_state module and holds
  * information about mapping between buttons and generated reports.

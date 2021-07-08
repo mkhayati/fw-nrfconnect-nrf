@@ -1,33 +1,34 @@
 /*
  * Copyright (c) 2018 - 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr/types.h>
 #include <sys/slist.h>
 #include <settings/settings.h>
 
-#include <bluetooth/services/hids_c.h>
+#include <bluetooth/services/hogp.h>
 #include <sys/byteorder.h>
 
 #define MODULE hid_forward
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 
 #include "hid_report_desc.h"
 #include "config_channel_transport.h"
 
 #include "hid_event.h"
+#include <caf/events/ble_common_event.h>
 #include "ble_event.h"
 #include "usb_event.h"
 #include "config_event.h"
-#include "power_event.h"
+#include <caf/events/power_event.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_HID_FORWARD_LOG_LEVEL);
 
 #define MAX_ENQUEUED_ITEMS CONFIG_DESKTOP_HID_FORWARD_MAX_ENQUEUED_REPORTS
-#define CFG_CHAN_RSP_READ_DELAY		K_MSEC(15)
+#define CFG_CHAN_RSP_READ_DELAY		15
 #define CFG_CHAN_MAX_RSP_POLL_CNT	50
 #define CFG_CHAN_UNUSED_PEER_ID		UINT8_MAX
 #define CFG_CHAN_BASE_ID		(CFG_CHAN_RECIPIENT_LOCAL + 1)
@@ -60,10 +61,10 @@ struct subscriber {
 };
 
 struct hids_peripheral {
-	struct bt_gatt_hids_c hidc;
+	struct bt_hogp hogp;
 	struct enqueued_reports enqueued_reports;
 
-	struct k_delayed_work read_rsp;
+	struct k_work_delayable read_rsp;
 	struct config_event *cfg_chan_rsp;
 	uint8_t cfg_chan_id;
 	uint8_t hwid[HWID_LEN];
@@ -324,8 +325,9 @@ static void enqueue_hid_report(struct enqueued_reports *enqueued_reports,
 	}
 
 	if (!item) {
-		LOG_ERR("OOM error");
-		module_set_state(MODULE_STATE_ERROR);
+		LOG_ERR("Dropped HID report");
+		/* Should never happen. */
+		__ASSERT_NO_MSG(false);
 	} else {
 		item->report = report;
 		sys_slist_append(&reports->list, &item->node);
@@ -380,17 +382,17 @@ static void forward_hid_report(struct hids_peripheral *per, uint8_t report_id,
 	}
 }
 
-static uint8_t hidc_read(struct bt_gatt_hids_c *hids_c,
-		      struct bt_gatt_hids_c_rep_info *rep,
-		      uint8_t err,
-		      const uint8_t *data)
+static uint8_t hogp_read(struct bt_hogp *hids_c,
+			 struct bt_hogp_rep_info *rep,
+			 uint8_t err,
+			 const uint8_t *data)
 {
 	__ASSERT_NO_MSG(!k_is_in_isr());
 	__ASSERT_NO_MSG(!k_is_preempt_thread());
 
 	struct hids_peripheral *per = CONTAINER_OF(hids_c,
 						   struct hids_peripheral,
-						   hidc);
+						   hogp);
 	__ASSERT_NO_MSG(per);
 
 	if (!data) {
@@ -401,8 +403,8 @@ static uint8_t hidc_read(struct bt_gatt_hids_c *hids_c,
 		return BT_GATT_ITER_CONTINUE;
 	}
 
-	uint8_t report_id = bt_gatt_hids_c_rep_id(rep);
-	size_t size = bt_gatt_hids_c_rep_size(rep);
+	uint8_t report_id = bt_hogp_rep_id(rep);
+	size_t size = bt_hogp_rep_size(rep);
 
 	__ASSERT_NO_MSG((report_id != REPORT_ID_RESERVED) &&
 			(report_id < REPORT_ID_COUNT));
@@ -414,7 +416,7 @@ static uint8_t hidc_read(struct bt_gatt_hids_c *hids_c,
 
 static bool is_peripheral_connected(struct hids_peripheral *per)
 {
-	return bt_gatt_hids_c_assign_check(&per->hidc);
+	return bt_hogp_assign_check(&per->hogp);
 }
 
 static int register_peripheral(struct bt_gatt_dm *dm, const uint8_t *hwid,
@@ -462,7 +464,7 @@ static int register_peripheral(struct bt_gatt_dm *dm, const uint8_t *hwid,
 	 * and won't be preempted. */
 	__ASSERT_NO_MSG(!k_is_preempt_thread());
 
-	int err = bt_gatt_hids_c_handles_assign(dm, &per->hidc);
+	int err = bt_hogp_handles_assign(dm, &per->hogp);
 
 	if (err) {
 		LOG_ERR("Cannot assign handles (err:%d)", err);
@@ -483,8 +485,8 @@ static int register_peripheral(struct bt_gatt_dm *dm, const uint8_t *hwid,
 	__ASSERT_NO_MSG(hwid_len == HWID_LEN);
 	memcpy(per->hwid, hwid, hwid_len);
 
-	LOG_INF("Peripheral %p registered and linked to %p", per,
-		get_subscriber(per));
+	LOG_INF("Peripheral %p registered and linked to %p", (void *)per,
+		(void *)get_subscriber(per));
 
 	return err;
 }
@@ -502,19 +504,22 @@ static void submit_forward_error_rsp(struct hids_peripheral *per,
 	per->cfg_chan_rsp = NULL;
 }
 
-static uint8_t hidc_read_cfg(struct bt_gatt_hids_c *hidc,
-			  struct bt_gatt_hids_c_rep_info *rep,
-			  uint8_t err, const uint8_t *data)
+static uint8_t hogp_read_cfg(struct bt_hogp *hogp,
+			     struct bt_hogp_rep_info *rep,
+			     uint8_t err, const uint8_t *data)
 {
+	/* Ensure k_work_reschedule won't fail on canceling. */
+	BUILD_ASSERT(CFG_CHAN_RSP_READ_DELAY > 0, "");
+
 	/* Make sure that the handler will not preempt system workqueue
 	 * and it will not be preempted by system workqueue.
 	 */
 	__ASSERT_NO_MSG(!k_is_in_isr());
 	__ASSERT_NO_MSG(!k_is_preempt_thread());
 
-	struct hids_peripheral *per = CONTAINER_OF(hidc,
+	struct hids_peripheral *per = CONTAINER_OF(hogp,
 						   struct hids_peripheral,
-						   hidc);
+						   hogp);
 
 	if (err) {
 		LOG_WRN("Failed to read report: %d", err);
@@ -556,9 +561,7 @@ static uint8_t hidc_read_cfg(struct bt_gatt_hids_c *hidc,
 			} else {
 				/* Reset response size. */
 				per->cfg_chan_rsp->dyndata.size = CONFIG_CHANNEL_FETCHED_DATA_MAX_SIZE;
-
-				k_delayed_work_submit(&per->read_rsp,
-						      CFG_CHAN_RSP_READ_DELAY);
+				k_work_reschedule(&per->read_rsp, K_MSEC(CFG_CHAN_RSP_READ_DELAY));
 			}
 		} else {
 			EVENT_SUBMIT(per->cfg_chan_rsp);
@@ -574,15 +577,13 @@ static void read_rsp_fn(struct k_work *work)
 	struct hids_peripheral *per = CONTAINER_OF(work,
 						   struct hids_peripheral,
 						   read_rsp);
-	struct bt_gatt_hids_c_rep_info *config_rep =
-		bt_gatt_hids_c_rep_find(&per->hidc,
-					BT_GATT_HIDS_REPORT_TYPE_FEATURE,
-					REPORT_ID_USER_CONFIG);
+	struct bt_hogp_rep_info *config_rep =
+		bt_hogp_rep_find(&per->hogp,
+				 BT_HIDS_REPORT_TYPE_FEATURE,
+				 REPORT_ID_USER_CONFIG);
 
 	__ASSERT_NO_MSG(config_rep);
-	int err = bt_gatt_hids_c_rep_read(&per->hidc,
-					  config_rep,
-					  hidc_read_cfg);
+	int err = bt_hogp_rep_read(&per->hogp, config_rep, hogp_read_cfg);
 
 	if (err) {
 		LOG_WRN("Cannot read feature report (err: %d)", err);
@@ -590,8 +591,8 @@ static void read_rsp_fn(struct k_work *work)
 	}
 }
 
-static void hidc_write_cb(struct bt_gatt_hids_c *hidc,
-			  struct bt_gatt_hids_c_rep_info *rep,
+static void hogp_write_cb(struct bt_hogp *hogp,
+			  struct bt_hogp_rep_info *rep,
 			  uint8_t err)
 {
 	/* Make sure that the handler will not preempt system workqueue
@@ -600,9 +601,9 @@ static void hidc_write_cb(struct bt_gatt_hids_c *hidc,
 	__ASSERT_NO_MSG(!k_is_in_isr());
 	__ASSERT_NO_MSG(!k_is_preempt_thread());
 
-	struct hids_peripheral *per = CONTAINER_OF(hidc,
+	struct hids_peripheral *per = CONTAINER_OF(hogp,
 						   struct hids_peripheral,
-						   hidc);
+						   hogp);
 
 	if (err) {
 		LOG_WRN("Failed to write report: %d", err);
@@ -617,8 +618,7 @@ static void hidc_write_cb(struct bt_gatt_hids_c *hidc,
 	 */
 	if (per->cfg_chan_rsp->status != CONFIG_STATUS_SET) {
 		per->cur_poll_cnt = 0;
-		k_delayed_work_submit(&per->read_rsp,
-				      CFG_CHAN_RSP_READ_DELAY);
+		k_work_reschedule(&per->read_rsp, K_MSEC(CFG_CHAN_RSP_READ_DELAY));
 	} else {
 		__ASSERT_NO_MSG(per->cfg_chan_rsp->dyndata.size == 0);
 		per->cfg_chan_rsp->status = CONFIG_STATUS_SUCCESS;
@@ -739,7 +739,7 @@ static void handle_config_channel_peers_req(const struct config_event *event)
 
 static bool handle_config_event(struct config_event *event)
 {
-	/* Make sure the function will not be preempted by hidc callbacks. */
+	/* Make sure the function will not be preempted by hogp callbacks. */
 	BUILD_ASSERT(CONFIG_SYSTEM_WORKQUEUE_PRIORITY < 0);
 
 	/* Ignore response event. */
@@ -767,27 +767,27 @@ static bool handle_config_event(struct config_event *event)
 		return true;
 	}
 
-	struct bt_gatt_hids_c *recipient_hidc =	&per->hidc;
+	struct bt_hogp *recipient_hogp = &per->hogp;
 
-	__ASSERT_NO_MSG(recipient_hidc != NULL);
+	__ASSERT_NO_MSG(recipient_hogp != NULL);
 
-	if (!bt_gatt_hids_c_ready_check(recipient_hidc)) {
+	if (!bt_hogp_ready_check(recipient_hogp)) {
 		send_nodata_response(event, CONFIG_STATUS_REJECT);
 		LOG_WRN("Cannot forward, peer disconnected");
 		return true;
 	}
 
 	bool has_out_report = false;
-	struct bt_gatt_hids_c_rep_info *config_rep;
+	struct bt_hogp_rep_info *config_rep;
 
-	config_rep = bt_gatt_hids_c_rep_find(recipient_hidc,
-					     BT_GATT_HIDS_REPORT_TYPE_OUTPUT,
-					     REPORT_ID_USER_CONFIG_OUT);
+	config_rep = bt_hogp_rep_find(recipient_hogp,
+				      BT_HIDS_REPORT_TYPE_OUTPUT,
+				      REPORT_ID_USER_CONFIG_OUT);
 
 	if (!config_rep) {
-		config_rep = bt_gatt_hids_c_rep_find(recipient_hidc,
-					     BT_GATT_HIDS_REPORT_TYPE_FEATURE,
-					     REPORT_ID_USER_CONFIG);
+		config_rep = bt_hogp_rep_find(recipient_hogp,
+					      BT_HIDS_REPORT_TYPE_FEATURE,
+					      REPORT_ID_USER_CONFIG);
 	} else {
 		has_out_report = true;
 	}
@@ -824,17 +824,12 @@ static bool handle_config_event(struct config_event *event)
 	int err;
 
 	if (has_out_report) {
-		err = bt_gatt_hids_c_rep_write_wo_rsp(recipient_hidc,
-						      config_rep,
-						      report,
-						      sizeof(report),
-						      hidc_write_cb);
+		err = bt_hogp_rep_write_wo_rsp(recipient_hogp, config_rep,
+					       report, sizeof(report),
+					       hogp_write_cb);
 	} else {
-		err = bt_gatt_hids_c_rep_write(recipient_hidc,
-					       config_rep,
-					       hidc_write_cb,
-					       report,
-					       sizeof(report));
+		err = bt_hogp_rep_write(recipient_hogp, config_rep,
+					hogp_write_cb, report, sizeof(report));
 	}
 
 	if (err) {
@@ -849,7 +844,7 @@ static bool handle_config_event(struct config_event *event)
 		} else {
 			dyndata_size = CONFIG_CHANNEL_FETCHED_DATA_MAX_SIZE;
 		}
-		/* Response will be handled by hidc_write_cb. */
+		/* Response will be handled by hogp_write_cb. */
 		__ASSERT_NO_MSG(per->cfg_chan_rsp == NULL);
 		per->cfg_chan_rsp = generate_response(event, dyndata_size);
 	}
@@ -859,14 +854,14 @@ static bool handle_config_event(struct config_event *event)
 
 static void disconnect_peripheral(struct hids_peripheral *per)
 {
-	LOG_INF("Peripheral %p disconnected", per);
+	LOG_INF("Peripheral %p disconnected", (void *)per);
 
-	struct bt_gatt_hids_c_rep_info *rep = NULL;
+	struct bt_hogp_rep_info *rep = NULL;
 
-	while (NULL != (rep = bt_gatt_hids_c_rep_next(&per->hidc, rep))) {
-		if (bt_gatt_hids_c_rep_type(rep) == BT_GATT_HIDS_REPORT_TYPE_INPUT) {
-			uint8_t report_id = bt_gatt_hids_c_rep_id(rep);
-			size_t size = bt_gatt_hids_c_rep_size(rep);
+	while (NULL != (rep = bt_hogp_rep_next(&per->hogp, rep))) {
+		if (bt_hogp_rep_type(rep) == BT_HIDS_REPORT_TYPE_INPUT) {
+			uint8_t report_id = bt_hogp_rep_id(rep);
+			size_t size = bt_hogp_rep_size(rep);
 
 			__ASSERT_NO_MSG((report_id != REPORT_ID_RESERVED) &&
 					(report_id < REPORT_ID_COUNT));
@@ -884,8 +879,9 @@ static void disconnect_peripheral(struct hids_peripheral *per)
 				 &per->enqueued_reports);
 	__ASSERT_NO_MSG(!is_any_report_enqueued(&per->enqueued_reports));
 
-	bt_gatt_hids_c_release(&per->hidc);
-	k_delayed_work_cancel(&per->read_rsp);
+	bt_hogp_release(&per->hogp);
+	/* Cancel cannot fail if executed from another work's context. */
+	(void)k_work_cancel_delayable(&per->read_rsp);
 	memset(per->hwid, 0, sizeof(per->hwid));
 	per->cur_poll_cnt = 0;
 	per->cfg_chan_id = CFG_CHAN_UNUSED_PEER_ID;
@@ -935,53 +931,51 @@ static void disable_subscription(struct subscriber *sub, uint8_t report_id)
 	drop_enqueued_reports(&sub->enqueued_reports, irep_idx);
 }
 
-static void hidc_ready(struct bt_gatt_hids_c *hids_c)
+static void hogp_ready(struct bt_hogp *hids_c)
 {
-	struct bt_gatt_hids_c_rep_info *rep = NULL;
+	struct bt_hogp_rep_info *rep = NULL;
 
-	while (NULL != (rep = bt_gatt_hids_c_rep_next(hids_c, rep))) {
-		if (bt_gatt_hids_c_rep_type(rep) ==
-		    BT_GATT_HIDS_REPORT_TYPE_INPUT) {
-			int err = bt_gatt_hids_c_rep_subscribe(hids_c,
-							       rep,
-							       hidc_read);
+	while (NULL != (rep = bt_hogp_rep_next(hids_c, rep))) {
+		if (bt_hogp_rep_type(rep) ==
+		    BT_HIDS_REPORT_TYPE_INPUT) {
+			int err = bt_hogp_rep_subscribe(hids_c, rep, hogp_read);
 
 			if (err) {
 				LOG_ERR("Cannot subscribe to report (err:%d)",
 					err);
 			} else {
 				LOG_INF("Subscriber to rep id:%d",
-					bt_gatt_hids_c_rep_id(rep));
+					bt_hogp_rep_id(rep));
 			}
 		}
 	}
 }
 
-static void hidc_prep_error(struct bt_gatt_hids_c *hids_c, int err)
+static void hogp_prep_error(struct bt_hogp *hids_c, int err)
 {
 	if (err) {
 		LOG_ERR("err:%d", err);
 	}
 }
 
-static void hidc_pm_update(struct bt_gatt_hids_c *hids_c)
+static void hogp_pm_update(struct bt_hogp *hids_c)
 {
 	LOG_INF("Protocol mode updated");
 }
 
 static void init(void)
 {
-	static const struct bt_gatt_hids_c_init_params params = {
-		.ready_cb = hidc_ready,
-		.prep_error_cb = hidc_prep_error,
-		.pm_update_cb = hidc_pm_update,
+	static const struct bt_hogp_init_params params = {
+		.ready_cb = hogp_ready,
+		.prep_error_cb = hogp_prep_error,
+		.pm_update_cb = hogp_pm_update,
 	};
 
 	for (size_t i = 0; i < ARRAY_SIZE(peripherals); i++) {
 		struct hids_peripheral *per = &peripherals[i];
 
-		bt_gatt_hids_c_init(&per->hidc, &params);
-		k_delayed_work_init(&per->read_rsp, read_rsp_fn);
+		bt_hogp_init(&per->hogp, &params);
+		k_work_init_delayable(&per->read_rsp, read_rsp_fn);
 		per->cfg_chan_id = CFG_CHAN_UNUSED_PEER_ID;
 
 		init_enqueued_reports(&per->enqueued_reports);
@@ -1119,8 +1113,10 @@ static bool event_handler(const struct event_header *eh)
 
 		if (event->state == PEER_STATE_DISCONNECTED) {
 			for (size_t i = 0; i < ARRAY_SIZE(peripherals); i++) {
-				if ((bt_gatt_hids_c_assign_check(&peripherals[i].hidc)) &&
-				    (bt_gatt_hids_c_conn(&peripherals[i].hidc) == event->id)) {
+				struct bt_hogp *hogp = &peripherals[i].hogp;
+
+				if (bt_hogp_assign_check(hogp) &&
+				    bt_hogp_conn(hogp) == event->id) {
 					disconnect_peripheral(&peripherals[i]);
 				}
 			}

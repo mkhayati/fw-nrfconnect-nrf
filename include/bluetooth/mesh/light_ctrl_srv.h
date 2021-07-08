@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -40,11 +40,6 @@ struct bt_mesh_light_ctrl_srv;
 		.onoff = BT_MESH_ONOFF_SRV_INIT(                               \
 			&_bt_mesh_light_ctrl_srv_onoff),                       \
 		.lightness = _lightness_srv,                                   \
-		.pub = { .update = _bt_mesh_light_ctrl_srv_update,             \
-			 .msg = NET_BUF_SIMPLE(                                \
-				 BT_MESH_LIGHT_CTRL_SRV_BUF_MAXLEN) },         \
-		.setup_pub.msg = NET_BUF_SIMPLE(                               \
-			BT_MESH_LIGHT_CTRL_SETUP_SRV_BUF_MAXLEN),              \
 		BT_MESH_LIGHT_CTRL_SRV_REG_INIT                                \
 	}
 
@@ -56,17 +51,17 @@ struct bt_mesh_light_ctrl_srv;
  */
 #define BT_MESH_MODEL_LIGHT_CTRL_SRV(_srv)                                     \
 	BT_MESH_MODEL_ONOFF_SRV(&(_srv)->onoff),                               \
-		BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_LIGHT_LC_SRV,                \
-				 _bt_mesh_light_ctrl_srv_op, &(_srv)->pub,     \
-				 BT_MESH_MODEL_USER_DATA(                      \
-					 struct bt_mesh_light_ctrl_srv, _srv), \
-				 &_bt_mesh_light_ctrl_srv_cb),                 \
-		BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_LIGHT_LC_SETUPSRV,           \
-				 _bt_mesh_light_ctrl_setup_srv_op,             \
-				 &(_srv)->setup_pub,                           \
-				 BT_MESH_MODEL_USER_DATA(                      \
-					 struct bt_mesh_light_ctrl_srv, _srv), \
-				 &_bt_mesh_light_ctrl_setup_srv_cb)
+	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_LIGHT_LC_SRV,                        \
+			 _bt_mesh_light_ctrl_srv_op, &(_srv)->pub,             \
+			 BT_MESH_MODEL_USER_DATA(                              \
+				 struct bt_mesh_light_ctrl_srv, _srv),         \
+			 &_bt_mesh_light_ctrl_srv_cb),                         \
+	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_LIGHT_LC_SETUPSRV,                   \
+			 _bt_mesh_light_ctrl_setup_srv_op,                     \
+			 &(_srv)->setup_pub,                                   \
+			 BT_MESH_MODEL_USER_DATA(                              \
+				 struct bt_mesh_light_ctrl_srv, _srv),         \
+			 &_bt_mesh_light_ctrl_setup_srv_cb)
 
 /** Light Lightness Control Server state */
 enum bt_mesh_light_ctrl_srv_state {
@@ -105,14 +100,14 @@ struct bt_mesh_light_ctrl_srv_cfg {
 struct bt_mesh_light_ctrl_srv_reg_cfg {
 	/** Target illuminance values */
 	struct sensor_value lux[LIGHT_CTRL_STATE_COUNT];
-	/** Regulator positive integral coefficient */
-	uint16_t kiu;
-	/** Regulator negative integral coefficient */
-	uint16_t kid;
-	/** Regulator positive propotional coefficient */
-	uint16_t kpu;
-	/** Regulator negative propotional coefficient */
-	uint16_t kpd;
+	/** Regulator upwards integral coefficient */
+	float kiu;
+	/** Regulator downwards integral coefficient */
+	float kid;
+	/** Regulator upwards propotional coefficient */
+	float kpu;
+	/** Regulator downwards propotional coefficient */
+	float kpd;
 	/** Regulator dead zone (in percent) */
 	uint8_t accuracy;
 };
@@ -120,9 +115,11 @@ struct bt_mesh_light_ctrl_srv_reg_cfg {
 /** Illumination regulator */
 struct bt_mesh_light_ctrl_srv_reg {
 	/** Regulator step timer */
-	struct k_delayed_work timer;
+	struct k_work_delayable timer;
 	/** Internal integral sum. */
-	uint16_t i;
+	float i;
+	/** Previous output */
+	uint16_t prev;
 	/** Regulator configuration */
 	struct bt_mesh_light_ctrl_srv_reg_cfg cfg;
 };
@@ -148,20 +145,31 @@ struct bt_mesh_light_ctrl_srv {
 	/** Present ambient illumination */
 	struct sensor_value ambient_lux;
 	/** State timer */
-	struct k_delayed_work timer;
+	struct k_work_delayable timer;
 
 #if CONFIG_BT_SETTINGS
 	/** Storage timer */
-	struct k_delayed_work store_timer;
+	struct k_work_delayable store_timer;
 #endif
 	/** Timer for delayed action */
-	struct k_delayed_work action_delay;
+	struct k_work_delayable action_delay;
 	/** Configuration parameters */
 	struct bt_mesh_light_ctrl_srv_cfg cfg;
 	/** Publish parameters */
 	struct bt_mesh_model_pub pub;
+	/* Publication buffer */
+	struct net_buf_simple pub_buf;
+	/* Publication data */
+	uint8_t pub_data[BT_MESH_MODEL_BUF_LEN(
+		BT_MESH_LIGHT_CTRL_OP_LIGHT_ONOFF_STATUS, 3)];
 	/** Setup model publish parameters */
 	struct bt_mesh_model_pub setup_pub;
+	/* Publication buffer */
+	struct net_buf_simple setup_pub_buf;
+	/* Publication data */
+	uint8_t setup_pub_data[BT_MESH_MODEL_BUF_LEN(
+		BT_MESH_LIGHT_CTRL_OP_PROP_STATUS,
+		2 + CONFIG_BT_MESH_SENSOR_CHANNEL_ENCODED_SIZE_MAX)];
 
 #if CONFIG_BT_MESH_LIGHT_CTRL_SRV_REG
 	/** Illuminance regulator */
@@ -200,7 +208,7 @@ int bt_mesh_light_ctrl_srv_on(struct bt_mesh_light_ctrl_srv *srv);
  *  state). Calling this function temporarily disables occupancy sensor
  *  triggering (referred to as "manual mode" in the documentation). The server
  *  will remain in manual mode until the manual mode timer expires, see
- *  @em CONFIG_BT_MESH_LIGHT_CTRL_SRV_TIME_MANUAL.
+ *  @option{CONFIG_BT_MESH_LIGHT_CTRL_SRV_TIME_MANUAL}.
  *
  *  @param[in] srv        Light Lightness Control Server instance.
  *
@@ -252,8 +260,6 @@ bool bt_mesh_light_ctrl_srv_is_on(struct bt_mesh_light_ctrl_srv *srv);
  *                 parameters.
  *
  *  @return 0              Successfully published the current Light state.
- *  @retval -ENOTSUP       A message context was not provided and publishing is
- *                         not supported.
  *  @retval -EADDRNOTAVAIL A message context was not provided and publishing is
  *                         not configured.
  *  @retval -EAGAIN        The device has not been provisioned.
@@ -267,7 +273,6 @@ extern const struct bt_mesh_model_op _bt_mesh_light_ctrl_srv_op[];
 extern const struct bt_mesh_model_cb _bt_mesh_light_ctrl_setup_srv_cb;
 extern const struct bt_mesh_model_op _bt_mesh_light_ctrl_setup_srv_op[];
 extern const struct bt_mesh_onoff_srv_handlers _bt_mesh_light_ctrl_srv_onoff;
-int _bt_mesh_light_ctrl_srv_update(struct bt_mesh_model *mod);
 /** @endcond */
 
 #ifdef __cplusplus

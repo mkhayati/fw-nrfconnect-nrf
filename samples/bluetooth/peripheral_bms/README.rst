@@ -3,7 +3,11 @@
 Bluetooth: Peripheral Bond Management Service (BMS)
 ###################################################
 
-The peripheral BMS sample demonstrates how to use the :ref:`bms_srv_readme`.
+.. contents::
+   :local:
+   :depth: 2
+
+The peripheral BMS sample demonstrates how to use the :ref:`bms_readme`.
 
 Overview
 ********
@@ -15,15 +19,13 @@ It supports up to two simultaneous Client connections.
 Requirements
 ************
 
-* One of the following Nordic development kits:
+The sample supports the following development kits:
 
 .. table-from-rows:: /includes/sample_board_rows.txt
    :header: heading
-   :rows: nrf5340pdk_nrf5340_cpuapp_and_cpuappns, nrf52840dk_nrf52840, nrf52dk_nrf52832
+   :rows: nrf5340dk_nrf5340_cpuapp_and_cpuappns, nrf52840dk_nrf52840, nrf52dk_nrf52832, nrf52dk_nrf52810
 
-* A Bluetooth Low Energy dongle or development kit
-
-* nRF Connect for Desktop
+The sample also requires a Bluetooth Low Energy dongle and nRF Connect for Desktop.
 
 User interface
 **************
@@ -48,7 +50,7 @@ Testing
 After programming the sample to your development kit, test it by performing the following steps:
 
 1. |connect_terminal_specific|
-#. Reset the board.
+#. Reset the kit.
 #. Start `nRF Connect for Desktop`_ and select the connected device that is used for communication.
 #. Connect to the device from nRF Connect.
    The device is advertising as "Nordic_BMS".
@@ -62,7 +64,7 @@ After programming the sample to your development kit, test it by performing the 
 #. Check the logs to verify that the connection security is updated.
 #. Disconnect the device in nRF Connect.
 #. Reconnect again and verify that the connection security is updated automatically.
-#. Verify that the Feature Characteristic of the Bond Management Service displays ``20 08 02``.
+#. Verify that the Feature Characteristic of the Bond Management Service displays ``10 08 02``.
    This means that the following features are supported:
 
    * Deletion of the bonds for the current connection of the requesting device.
@@ -84,7 +86,7 @@ Dependencies
 
 This sample uses the following |NCS| libraries:
 
-* :ref:`bms_srv_readme`
+* :ref:`bms_readme`
 * :ref:`dk_buttons_and_leds_readme`
 
 In addition, it uses the following Zephyr libraries:

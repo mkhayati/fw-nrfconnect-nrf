@@ -3,6 +3,10 @@
 Profiler
 ########
 
+.. contents::
+   :local:
+   :depth: 2
+
 The Profiler sample demonstrates the functionality of the :ref:`profiler` subsystem.
 It shows how to use the Profiler to log and visualize data about custom events that are not part of the :ref:`event_manager`.
 
@@ -38,16 +42,19 @@ Building and running
 Testing
 =======
 
-After programming the sample to your board, you can test it by running the script ``real_time_plot.py`` (located under :file:`scripts/profiler`).
+After programming the sample to your development kit, you can test it by running the script ``real_time_plot.py`` (located under :file:`scripts/profiler`).
 As an argument, pass the name that should be used to store the data.
 For example, run ``real_time_plot.py test_name`` to generate a :file:`test_name.csv` and a :file:`test_name.json` file.
 
 The script opens a GUI window that displays events as points on timelines.
 See the Profiler documentation for more information.
 
-Connect to the board with a terminal emulator (for example, PuTTY) to see messages displayed by the sample.
+Connect to the development kit with a terminal emulator (for example, PuTTY) to see messages displayed by the sample.
 See :ref:`putty` for the required settings.
 
+.. tip::
+   If you use SEGGER Embedded Studio, make sure to stop debugging before you run Python scripts.
+   Otherwise, you may observe problems with accessing RTT data by the profiler scripts.
 
 Dependencies
 ************

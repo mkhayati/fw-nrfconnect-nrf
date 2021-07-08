@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2020 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 if (CONFIG_BUILD_S1_VARIANT AND
@@ -48,19 +48,16 @@ if (CONFIG_BUILD_S1_VARIANT AND
   if(CONFIG_GEN_ISR_TABLES)
     # ${link_variant}isr_tables.c is generated from ${ZEPHYR_PREBUILT_EXECUTABLE} by
     # gen_isr_tables.py
-    set(obj_copy_cmd "")
-    bintools_objcopy(
-      RESULT_CMD_LIST obj_copy_cmd
-      TARGET_INPUT    ${OUTPUT_FORMAT}
-      TARGET_OUTPUT   "binary"
-      SECTION_ONLY    ".intList"
-      FILE_INPUT      $<TARGET_FILE:${${link_variant}prebuilt}>
-      FILE_OUTPUT     "${link_variant}isrList.bin"
-      )
-
     add_custom_command(
       OUTPUT ${link_variant}isr_tables.c
-      ${obj_copy_cmd}
+      COMMAND $<TARGET_PROPERTY:bintools,elfconvert_command>
+              $<TARGET_PROPERTY:bintools,elfconvert_flag>
+              $<TARGET_PROPERTY:bintools,elfconvert_flag_intarget>${OUTPUT_FORMAT}
+              $<TARGET_PROPERTY:bintools,elfconvert_flag_outtarget>binary
+              $<TARGET_PROPERTY:bintools,elfconvert_flag_section_only>.intList
+              $<TARGET_PROPERTY:bintools,elfconvert_flag_infile>$<TARGET_FILE:${${link_variant}prebuilt}>
+              $<TARGET_PROPERTY:bintools,elfconvert_flag_outfile>${link_variant}isrList.bin
+              $<TARGET_PROPERTY:bintools,elfconvert_flag_final>
       COMMAND ${PYTHON_EXECUTABLE}
       ${ZEPHYR_BASE}/arch/common/gen_isr_tables.py
       --output-source ${link_variant}isr_tables.c
@@ -72,12 +69,24 @@ if (CONFIG_BUILD_S1_VARIANT AND
       DEPENDS ${${link_variant}prebuilt}
       )
 
-    set(${link_variant}generated_kernel_files ${link_variant}isr_tables.c)
+    list(APPEND ${link_variant}generated_kernel_files ${link_variant}isr_tables.c)
   endif()
+
+  add_custom_command(
+    OUTPUT ${link_variant}dev_handles.c
+    COMMAND
+    ${PYTHON_EXECUTABLE}
+    ${ZEPHYR_BASE}/scripts/gen_handles.py
+    --output-source ${link_variant}dev_handles.c
+    --kernel $<TARGET_FILE:${${link_variant}prebuilt}>
+    --zephyr-base ${ZEPHYR_BASE}
+    DEPENDS $<TARGET_FILE:${${link_variant}prebuilt}>
+    )
+  list(APPEND ${link_variant}generated_kernel_files ${link_variant}dev_handles.c)
 
   configure_linker_script(
     ${link_variant}linker.cmd
-    "-DLINK_INTO_${link_variant_name};-DLINKER_PASS2"
+    "-DLINK_INTO_${link_variant_name};-DLINKER_ZEPHYR_FINAL;-DLINKER_PASS2"
     ${PRIV_STACK_DEP}
     ${CODE_RELOCATION_DEP}
     ${${link_variant}prebuilt}
@@ -113,20 +122,18 @@ if (CONFIG_BUILD_S1_VARIANT AND
   endif()
 
   # Rule to generate hex file of .elf
-  bintools_objcopy(
-    RESULT_CMD_LIST    ${link_variant}hex_cmd
-    RESULT_BYPROD_LIST ${link_variant}hex_byprod
-    STRIP_ALL
-    GAP_FILL           "0xff"
-    TARGET_OUTPUT      "ihex"
-    SECTION_REMOVE     ${out_hex_sections_remove}
-    FILE_INPUT         ${exe}.elf
-    FILE_OUTPUT        ${output}
-    )
-
   add_custom_command(${${link_variant}hex_cmd}
+    COMMAND $<TARGET_PROPERTY:bintools,elfconvert_command>
+            $<TARGET_PROPERTY:bintools,elfconvert_flag>
+            $<TARGET_PROPERTY:bintools,elfconvert_flag_gapfill>0xff
+            $<TARGET_PROPERTY:bintools,elfconvert_flag_outtarget>ihex
+            $<TARGET_PROPERTY:bintools,elfconvert_flag_infile>${exe}.elf
+            $<TARGET_PROPERTY:bintools,elfconvert_flag_outfile>${output}
+            $<TARGET_PROPERTY:bintools,elfconvert_flag_final>
     DEPENDS ${exe}
-    OUTPUT ${output})
+    OUTPUT ${output}
+    COMMAND_EXPAND_LISTS
+  )
 
   add_custom_target(
     ${link_variant}image_hex

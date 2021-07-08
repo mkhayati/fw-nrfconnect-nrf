@@ -3,6 +3,10 @@
 Source and sink module lists
 ############################
 
+.. contents::
+   :local:
+   :depth: 2
+
 This page includes lists of source and sink modules for events that have many listeners or sources.
 These were gathered on a single page to simplify the event propagation tables.
 
@@ -79,6 +83,7 @@ Source modules for module_state_event
 * :ref:`nrf_desktop_ble_conn_params`
 * :ref:`nrf_desktop_ble_discovery`
 * :ref:`nrf_desktop_ble_latency`
+* :ref:`nrf_desktop_ble_passkey`
 * :ref:`nrf_desktop_ble_qos`
 * :ref:`nrf_desktop_ble_scan`
 * :ref:`nrf_desktop_ble_state`
@@ -101,7 +106,7 @@ Source modules for module_state_event
 * :ref:`nrf_desktop_qos`
 * :ref:`nrf_desktop_selector`
 * :ref:`nrf_desktop_settings_loader`
-* :ref:`nrf_desktop_smp`
+* :ref:`nrf_desktop_ble_smp`
 * :ref:`nrf_desktop_usb_state`
 * :ref:`nrf_desktop_watchdog`
 * :ref:`nrf_desktop_wheel`
@@ -123,6 +128,7 @@ Sink modules for module_state_event
 * :ref:`nrf_desktop_ble_conn_params`
 * :ref:`nrf_desktop_ble_discovery`
 * :ref:`nrf_desktop_ble_latency`
+* :ref:`nrf_desktop_ble_passkey`
 * :ref:`nrf_desktop_ble_qos`
 * :ref:`nrf_desktop_ble_scan`
 * :ref:`nrf_desktop_ble_state`
@@ -147,7 +153,7 @@ Sink modules for module_state_event
 * :ref:`nrf_desktop_qos`
 * :ref:`nrf_desktop_selector`
 * :ref:`nrf_desktop_settings_loader`
-* :ref:`nrf_desktop_smp`
+* :ref:`nrf_desktop_ble_smp`
 * :ref:`nrf_desktop_usb_state`
 * :ref:`nrf_desktop_wheel`
 

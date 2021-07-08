@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef ZIGBEE_CLI_H__
@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #include <zboss_api.h>
-#include <zigbee_helpers.h>
+#include <zigbee/zigbee_app_utils.h>
 #include "zigbee_cli_utils.h"
 #include "zigbee_cli_ctx_mgr.h"
 

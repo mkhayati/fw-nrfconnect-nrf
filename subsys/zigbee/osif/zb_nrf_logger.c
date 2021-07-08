@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zboss_api.h>
@@ -19,8 +19,12 @@ void zb_osif_serial_init(void)
 static zb_uint8_t buf8[8];
 static zb_uint_t buffered;
 
-void zb_osif_serial_put_bytes(zb_uint8_t *buf, zb_short_t len)
+void zb_osif_serial_put_bytes(const zb_uint8_t *buf, zb_short_t len)
 {
+	if (IS_ENABLED(CONFIG_ZBOSS_TRACE_LOG_LEVEL_OFF)) {
+		return;
+	}
+
 	/* Try to fill hex dump by 8-bytes dumps */
 
 	while (len) {

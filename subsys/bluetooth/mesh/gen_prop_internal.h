@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -28,9 +28,9 @@ enum bt_mesh_prop_op_type {
 };
 
 static inline enum bt_mesh_prop_srv_kind
-srv_kind(const struct bt_mesh_model *mod)
+srv_kind(const struct bt_mesh_model *model)
 {
-	switch (mod->id) {
+	switch (model->id) {
 	case BT_MESH_MODEL_ID_GEN_ADMIN_PROP_SRV:
 		return BT_MESH_PROP_SRV_KIND_ADMIN;
 	case BT_MESH_MODEL_ID_GEN_MANUFACTURER_PROP_SRV:
