@@ -9,7 +9,7 @@
 #include <net/aws_fota.h>
 #endif
 
-#if defined(CONFIG_BOARD_QEMU_X86) && !defined(CONFIG_BSD_LIBRARY)
+#if defined(CONFIG_BOARD_QEMU_X86) && !defined(CONFIG_NRF_MODEM_LIB)
 #include "certificates.h"
 #endif
 
@@ -199,7 +199,7 @@ static int api_connect_error_translate(const int err)
 		return -ENODATA;
 	}
 }
-#endif /* defined(CONFIG_BSD_LIBRARY) */
+#endif /* !defined(CONFIG_CLOUD_API) */
 
 static void mqtt_cloud_notify_event(const struct mqtt_cloud_evt *mqtt_cloud_evt)
 {
@@ -231,7 +231,7 @@ static void mqtt_cloud_notify_event(const struct mqtt_cloud_evt *mqtt_cloud_evt)
 		cloud_evt.type = CLOUD_EVT_DATA_RECEIVED;
 		cloud_evt.data.msg.buf = mqtt_cloud_evt->data.msg.ptr;
 		cloud_evt.data.msg.len = mqtt_cloud_evt->data.msg.len;
-		cloud_evt.data.msg.endpoint.type = CLOUD_EP_TOPIC_MSG;
+		cloud_evt.data.msg.endpoint.type = CLOUD_EP_MSG;
 		cloud_evt.data.msg.endpoint.str =
 				(char *)mqtt_cloud_evt->data.msg.topic.str;
 		cloud_evt.data.msg.endpoint.len =
@@ -652,7 +652,7 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 	}
 }
 
-#if !defined(CONFIG_BSD_LIBRARY)
+#if !defined(CONFIG_NRF_MODEM_LIB)
 static int certificates_provision(void)
 {
 	static bool certs_added;
@@ -694,7 +694,7 @@ static int certificates_provision(void)
 
 	return 0;
 }
-#endif /* !defined(CONFIG_BSD_LIBRARY) */
+#endif /* !defined(CONFIG_NRF_MODEM_LIB) */
 
 #if defined(CONFIG_MQTT_CLOUD_STATIC_IPV4)
 static int broker_init(void)
@@ -833,7 +833,7 @@ static int client_broker_init(struct mqtt_client *const client)
 	tls_cfg->sec_tag_list		= sec_tag_list;
 	tls_cfg->hostname		= CONFIG_MQTT_CLOUD_BROKER_HOST_NAME;
 
-#if defined(CONFIG_BSD_LIBRARY)
+#if defined(CONFIG_NRF_MODEM_LIB)
 	tls_cfg->session_cache		=
 		IS_ENABLED(CONFIG_MQTT_CLOUD_TLS_SESSION_CACHING) ?
 			TLS_SESSION_CACHE_ENABLED : TLS_SESSION_CACHE_DISABLED;
@@ -846,7 +846,7 @@ static int client_broker_init(struct mqtt_client *const client)
 		LOG_ERR("Could not provision certificates, error: %d", err);
 		return err;
 	}
-#endif /* !defined(CONFIG_BSD_LIBRARY) */
+#endif /* !defined(CONFIG_NRF_MODEM_LIB) */
 #endif /* defined(MQTT_CLOUD_TLS) */
 
 	return err;
@@ -893,15 +893,15 @@ int mqtt_cloud_send(const struct mqtt_cloud_data *const tx_data)
 
 	switch (tx_data_pub.topic.type) {
 #if defined(CONFIG_CLOUD_API)
-	case CLOUD_EP_TOPIC_STATE:
+	case CLOUD_EP_STATE_GET:
 		tx_data_pub.topic.str = get_topic;
 		tx_data_pub.topic.len = strlen(get_topic);
 		break;
-	case CLOUD_EP_TOPIC_MSG:
+	case CLOUD_EP_STATE:
 		tx_data_pub.topic.str = update_topic;
 		tx_data_pub.topic.len = strlen(update_topic);
 		break;
-	case CLOUD_EP_TOPIC_STATE_DELETE:
+	case CLOUD_EP_STATE_DELETE:
 		tx_data_pub.topic.str = delete_topic;
 		tx_data_pub.topic.len = strlen(delete_topic);
 		break;
