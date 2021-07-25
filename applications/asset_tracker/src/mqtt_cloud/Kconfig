@@ -11,6 +11,25 @@ menuconfig MQTT_CLOUD
 
 if MQTT_CLOUD
 
+config MQTT_CLOUD_SEND_TIMEOUT
+	bool "Send data with socket timeout"
+	default y
+	help
+	  Configures a timeout on the MQTT Cloud socket to ensure that a call to the send function will
+	  not block indefinitely. To configure the length of the timeout,
+	  use MQTT_CLOUD_SEND_TIMEOUT_SEC.
+
+if MQTT_CLOUD_SEND_TIMEOUT
+
+config MQTT_CLOUD_SEND_TIMEOUT_SEC
+	int "Send timeout"
+	default 60
+	help
+	  Timeout in seconds to use when the MQTT Cloud socket is configured to
+	  send with a timeout by enabling MQTT_CLOUD_SEND_TIMEOUT.
+
+endif
+
 config MQTT_CLOUD_STATIC_IPV4
 	bool "Enable use of static IPv4"
 

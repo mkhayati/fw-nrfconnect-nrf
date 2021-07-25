@@ -2,7 +2,6 @@
 #include <net/mqtt.h>
 #include <net/socket.h>
 #include <net/cloud.h>
-#include <random/rand32.h>
 #include <stdio.h>
 
 #if defined(CONFIG_AWS_FOTA)
@@ -19,6 +18,14 @@ LOG_MODULE_REGISTER(mqtt_cloud, CONFIG_MQTT_CLOUD_LOG_LEVEL);
 
 BUILD_ASSERT(sizeof(CONFIG_MQTT_CLOUD_BROKER_HOST_NAME) > 1,
 	    "MQTT Cloud hostname not set");
+
+/* Check that the client ID buffer is large enough if a static ID is used. */
+#if !defined(CONFIG_MQTT_CLOUD_CLIENT_ID_APP)
+BUILD_ASSERT(CONFIG_MQTT_CLOUD_CLIENT_ID_MAX_LEN >=
+	     sizeof(CONFIG_MQTT_CLOUD_CLIENT_ID_STATIC) - 1,
+	     "MQTT client ID static buffer to small "
+	     "Increase CONFIG_MQTT_CLOUD_CLIENT_ID_MAX_LEN");
+#endif /* !defined(CONFIG_MQTT_CLOUD_CLIENT_ID_APP */
 
 #if defined(CONFIG_MQTT_CLOUD_IPV6)
 #define MQTT_AF_FAMILY AF_INET6
@@ -92,7 +99,6 @@ static char delete_rejected_topic[DELETE_REJECTED_TOPIC_LEN + 1];
 static struct cloud_backend *mqtt_cloud_backend;
 #endif
 
-#define MQTT_CLOUD_POLL_TIMEOUT_MS 500
 
 static struct mqtt_cloud_app_topic_data app_topic_data;
 static struct mqtt_client client;
@@ -106,6 +112,21 @@ static mqtt_cloud_evt_handler_t module_evt_handler;
 
 static atomic_t disconnect_requested;
 static atomic_t connection_poll_active;
+
+/* Flag that indicates if the client is disconnected from the
+ * MQTT broker, or not.
+ */
+static atomic_t mqtt_cloud_disconnected = ATOMIC_INIT(1);
+
+/* Structure used to confirm successful subscriptions. */
+static struct mqtt_cloud_suback_confirmation {
+	/* Subscription ID for application specific topics. */
+	uint16_t app_subs_message_id;
+	/* Subscription ID for MQTT specific topics. */
+	uint16_t mqtt_subs_message_id;
+	/* Number of active topic lists subscribed to by the MQTT Cloud backend. */
+	uint8_t active_topic_list_count;
+} suback_conf;
 
 static K_SEM_DEFINE(connection_poll_sem, 0, 1);
 
@@ -252,6 +273,9 @@ static void mqtt_cloud_notify_event(const struct mqtt_cloud_evt *mqtt_cloud_evt)
 	case MQTT_CLOUD_EVT_ERROR:
 		cloud_evt.data.err = mqtt_cloud_evt->data.err;
 		cloud_evt.type = CLOUD_EVT_ERROR;
+	case MQTT_CLOUD_EVT_FOTA_ERROR:
+		cloud_evt.type = CLOUD_EVT_FOTA_ERROR;
+		cloud_evt.data.err = mqtt_cloud_evt->data.err;
 		break;
 	case MQTT_CLOUD_EVT_FOTA_DL_PROGRESS:
 		cloud_evt.type = CLOUD_EVT_FOTA_DL_PROGRESS;
@@ -409,8 +433,9 @@ static int mqtt_cloud_topics_populate(char *const id, size_t id_len)
 	return 0;
 }
 
-/** Returns the number of topics subscribed to (0 or greater),
-  * or a negative error code. */
+/* Returns the number of topics subscribed to (0 or greater),
+ * or a negative error code.
+ */
 static int topic_subscribe(void)
 {
 	int err;
@@ -481,10 +506,13 @@ static int topic_subscribe(void)
 	};
 
 	if (app_topic_data.list_count > 0) {
+
+		suback_conf.app_subs_message_id = k_cycle_get_32();
+
 		const struct mqtt_subscription_list app_sub_list = {
 			.list = app_topic_data.list,
 			.list_count = app_topic_data.list_count,
-			.message_id = sys_rand32_get()
+			.message_id = suback_conf.app_subs_message_id
 		};
 
 		for (size_t i = 0; i < app_sub_list.list_count; i++) {
@@ -495,14 +523,20 @@ static int topic_subscribe(void)
 		err = mqtt_subscribe(&client, &app_sub_list);
 		if (err) {
 			LOG_ERR("Application topics subscribe, error: %d", err);
+			return err;
 		}
+
+		suback_conf.active_topic_list_count++;
 	}
 
 	if (ARRAY_SIZE(mqtt_cloud_rx_list) > 0) {
+
+		suback_conf.mqtt_subs_message_id = k_cycle_get_32();
+
 		const struct mqtt_subscription_list mqtt_sub_list = {
 			.list = (struct mqtt_topic *)&mqtt_cloud_rx_list,
 			.list_count = ARRAY_SIZE(mqtt_cloud_rx_list),
-			.message_id = sys_rand32_get()
+			.message_id = suback_conf.mqtt_subs_message_id
 		};
 
 		for (size_t i = 0; i < mqtt_sub_list.list_count; i++) {
@@ -513,13 +547,56 @@ static int topic_subscribe(void)
 		err = mqtt_subscribe(&client, &mqtt_sub_list);
 		if (err) {
 			LOG_ERR("MQTT shadow topics subscribe, error: %d", err);
+			return err;
 		}
+
+		suback_conf.active_topic_list_count++;
 	}
 
 	if (err < 0) {
 		return err;
 	}
 	return app_topic_data.list_count + ARRAY_SIZE(mqtt_cloud_rx_list);
+}
+
+/* Function that checks if all topics subscribed to by the client has been
+ * acknowledged.
+ */
+static int subscription_list_id_check(uint16_t suback_message_id,
+				      int suback_result)
+{
+	int err;
+	static int suback_count;
+
+	if (suback_result) {
+		/* Error subscribing to topics. */
+		err = suback_result;
+		goto clean_exit;
+	}
+
+	if (suback_conf.app_subs_message_id == suback_message_id) {
+		suback_count++;
+	} else if (suback_conf.mqtt_subs_message_id == suback_message_id) {
+		suback_count++;
+	}
+
+	if (suback_count >= suback_conf.active_topic_list_count &&
+	    suback_conf.active_topic_list_count > 0) {
+		/* All subscriptions are acknowledged. */
+		err = 0;
+		goto clean_exit;
+	}
+
+	/* Missing subscription list acknowledgment. Wait for next
+	 * MQTT SUBACK.
+	 */
+	return -EAGAIN;
+
+clean_exit:
+	suback_count = 0;
+	memset(&suback_conf, 0, sizeof(struct mqtt_cloud_suback_confirmation));
+
+	return err;
 }
 
 static int publish_get_payload(struct mqtt_client *const c, size_t length)
@@ -545,16 +622,9 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		return;
 	} else if (err < 0) {
 		LOG_ERR("aws_fota_mqtt_evt_handler, error: %d", err);
-		LOG_DBG("Disconnecting MQTT client...");
-
-		atomic_set(&disconnect_requested, 1);
-		err = mqtt_disconnect(c);
-		if (err) {
-			LOG_ERR("Could not disconnect: %d", err);
-			mqtt_cloud_evt.type = MQTT_CLOUD_EVT_ERROR;
-			mqtt_cloud_evt.data.err = err;
-			mqtt_cloud_notify_event(&mqtt_cloud_evt);
-		}
+		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_FOTA_ERROR;
+		mqtt_cloud_evt.data.err = err;
+		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 	}
 #endif
 
@@ -578,29 +648,39 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_CONNECTED;
 		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 
-		if (!mqtt_evt->param.connack.session_present_flag) {
-			int res = topic_subscribe();
+		if (!mqtt_evt->param.connack.session_present_flag ||
+		    IS_ENABLED(CONFIG_MQTT_CLEAN_SESSION)) {
+			err = topic_subscribe();
 
-			if (res < 0) {
+			if (err < 0) {
 				mqtt_cloud_evt.type = MQTT_CLOUD_EVT_ERROR;
 				mqtt_cloud_evt.data.err = err;
 				mqtt_cloud_notify_event(&mqtt_cloud_evt);
 				break;
 			}
-			if (res == 0) {
+			if (err == 0) {
 				/* There were not topics to subscribe to. */
 				mqtt_cloud_evt.type = MQTT_CLOUD_EVT_READY;
 				mqtt_cloud_notify_event(&mqtt_cloud_evt);
 			} /* else: wait for SUBACK */
 		} else {
-			/** pre-existing session:
-			  * subscription is already established */
+			/* pre-existing session:
+			 * subscription is already established.
+			 */
 			mqtt_cloud_evt.type = MQTT_CLOUD_EVT_READY;
 			mqtt_cloud_notify_event(&mqtt_cloud_evt);
 		}
 		break;
 	case MQTT_EVT_DISCONNECT:
 		LOG_DBG("MQTT_EVT_DISCONNECT: result = %d", mqtt_evt->result);
+
+		mqtt_cloud_evt.data.err = MQTT_CLOUD_DISCONNECT_MISC;
+
+		if (atomic_get(&disconnect_requested)) {
+			mqtt_cloud_evt.data.err = MQTT_CLOUD_DISCONNECT_USER_REQUEST;
+		}
+
+		atomic_set(&mqtt_cloud_disconnected, 1);
 		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_DISCONNECTED;
 		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 		break;
@@ -643,9 +723,24 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		LOG_DBG("MQTT_EVT_SUBACK: id = %d result = %d",
 			mqtt_evt->param.suback.message_id,
 			mqtt_evt->result);
-		/* MQTT subscription established. */
-		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_READY;
-		mqtt_cloud_notify_event(&mqtt_cloud_evt);
+
+		err = subscription_list_id_check(
+					mqtt_evt->param.suback.message_id,
+					mqtt_evt->result);
+		if (err == 0) {
+			/* All subscription list IDs confirmed. */
+
+			/* MQTT subscriptions established. */
+			mqtt_cloud_evt.type = MQTT_CLOUD_EVT_READY;
+			mqtt_cloud_notify_event(&mqtt_cloud_evt);
+		} else if (err == -EAGAIN) {
+			/* Subscriptions remaining to be acknowledged. */
+		} else if (err < 0) {
+			/* Error subscribing to topics. */
+			mqtt_cloud_evt.type = MQTT_CLOUD_EVT_ERROR;
+			mqtt_cloud_evt.data.err = err;
+			mqtt_cloud_notify_event(&mqtt_cloud_evt);
+		}
 		break;
 	default:
 		break;
@@ -852,6 +947,51 @@ static int client_broker_init(struct mqtt_client *const client)
 	return err;
 }
 
+static int connect_client(struct mqtt_cloud_config *const config)
+{
+	int err;
+
+	err = client_broker_init(&client);
+	if (err) {
+		LOG_ERR("client_broker_init, error: %d", err);
+		return err;
+	}
+
+	err = mqtt_connect(&client);
+	if (err) {
+		LOG_ERR("mqtt_connect, error: %d", err);
+		err = connect_error_translate(err);
+		return err;
+	}
+
+	if (IS_ENABLED(CONFIG_MQTT_CLOUD_SEND_TIMEOUT)) {
+		struct timeval timeout = {
+			.tv_sec = CONFIG_MQTT_CLOUD_SEND_TIMEOUT_SEC
+		};
+
+		err = setsockopt(client.transport.tls.sock,
+				 SOL_SOCKET,
+				 SO_SNDTIMEO,
+				 &timeout,
+				 sizeof(timeout));
+		if (err == -1) {
+			LOG_WRN("Failed to set timeout, errno: %d", errno);
+
+			/* Don't propagate this as an error. */
+			err = 0;
+		} else {
+			LOG_DBG("Using send socket timeout of %d seconds",
+				CONFIG_MQTT_CLOUD_SEND_TIMEOUT_SEC);
+		}
+	}
+
+	if (config != NULL) {
+		config->socket = client.transport.tls.sock;
+	}
+
+	return 0;
+}
+
 static int connection_poll_start(void)
 {
 	if (atomic_get(&connection_poll_active)) {
@@ -872,7 +1012,7 @@ int mqtt_cloud_ping(void)
 
 int mqtt_cloud_keepalive_time_left(void)
 {
-	return (int)mqtt_keepalive_time_left(&client);
+	return mqtt_keepalive_time_left(&client);
 }
 
 int mqtt_cloud_input(void)
@@ -957,30 +1097,23 @@ int mqtt_cloud_connect(struct mqtt_cloud_config *const config)
 
 	if (IS_ENABLED(CONFIG_MQTT_CLOUD_CONNECTION_POLL_THREAD)) {
 		err = connection_poll_start();
+		if (err) {
+			LOG_WRN("connection_poll_start failed, error: %d", err);
+			return err;
+		}
 	} else {
 		atomic_set(&disconnect_requested, 0);
 
-		err = client_broker_init(&client);
+		err = connect_client(config);
 		if (err) {
-			LOG_ERR("client_broker_init, error: %d", err);
+			LOG_WRN("connect_client failed, error: %d", err);
 			return err;
 		}
 
-		err = mqtt_connect(&client);
-		if (err) {
-			LOG_ERR("mqtt_connect, error: %d", err);
-		}
-
-		err = connect_error_translate(err);
-
-#if defined(MQTT_CLOUD_TLS)
-		config->socket = client.transport.tls.sock;
-#else
-		config->socket = client.transport.tcp.sock;
-#endif
+		atomic_set(&mqtt_cloud_disconnected, 0);
 	}
 
-	return err;
+	return 0;
 }
 
 int mqtt_cloud_subscription_topics_add(
@@ -1014,6 +1147,12 @@ int mqtt_cloud_init(const struct mqtt_cloud_config *const config,
 	int err;
 
 	if (IS_ENABLED(CONFIG_MQTT_CLOUD_CLIENT_ID_APP) &&
+		config == NULL) {
+		LOG_ERR("config is NULL");
+		return -EINVAL;
+	}
+
+	if (IS_ENABLED(CONFIG_MQTT_CLOUD_CLIENT_ID_APP) &&
 	    config->client_id_len >= CONFIG_MQTT_CLOUD_CLIENT_ID_MAX_LEN) {
 		LOG_ERR("Client ID string too long");
 		return -EMSGSIZE;
@@ -1025,7 +1164,12 @@ int mqtt_cloud_init(const struct mqtt_cloud_config *const config,
 		return -ENODATA;
 	}
 
-	err = mqtt_cloud_topics_populate(config->client_id, config->client_id_len);
+	if (IS_ENABLED(CONFIG_MQTT_CLOUD_CLIENT_ID_APP)) {
+		err = mqtt_cloud_topics_populate(config->client_id, config->client_id_len);
+	} else {
+		err = mqtt_cloud_topics_populate(NULL, 0);
+	}
+
 	if (err) {
 		LOG_ERR("mqtt_topics_populate, error: %d", err);
 		return err;
@@ -1062,45 +1206,39 @@ start:
 	mqtt_cloud_evt.type = MQTT_CLOUD_EVT_CONNECTING;
 	mqtt_cloud_notify_event(&mqtt_cloud_evt);
 
-	err = client_broker_init(&client);
-	if (err) {
-		LOG_ERR("client_broker_init, error: %d", err);
-	}
-
-	err = mqtt_connect(&client);
-	if (err) {
-		LOG_ERR("mqtt_connect, error: %d", err);
-	}
-
-	err = connect_error_translate(err);
-
+	err = connect_client(NULL);
 	if (err != MQTT_CLOUD_CONNECT_RES_SUCCESS) {
 		mqtt_cloud_evt.data.err = err;
 		mqtt_cloud_evt.type = MQTT_CLOUD_EVT_CONNECTING;
 		mqtt_cloud_notify_event(&mqtt_cloud_evt);
 		goto reset;
-	} else {
-		LOG_DBG("MQTT broker connection request sent.");
 	}
+
+	LOG_DBG("MQTT broker connection request sent");
 
 	fds[0].fd = client.transport.tls.sock;
 	fds[0].events = POLLIN;
 
 	mqtt_cloud_evt.type = MQTT_CLOUD_EVT_DISCONNECTED;
+	atomic_set(&mqtt_cloud_disconnected, 0);
 
 	while (true) {
-		err = poll(fds, ARRAY_SIZE(fds), MQTT_CLOUD_POLL_TIMEOUT_MS);
+		err = poll(fds, ARRAY_SIZE(fds), mqtt_cloud_keepalive_time_left());
 
+		/* If poll returns 0 the timeout has expired. */
 		if (err == 0) {
-			if (mqtt_cloud_keepalive_time_left() <
-			    MQTT_CLOUD_POLL_TIMEOUT_MS) {
-				mqtt_cloud_ping();
-			}
+			mqtt_cloud_ping();
 			continue;
 		}
 
 		if ((fds[0].revents & POLLIN) == POLLIN) {
 			mqtt_cloud_input();
+
+			if (atomic_get(&mqtt_cloud_disconnected) == 1) {
+				LOG_DBG("The cloud socket is already closed.");
+				break;
+			}
+
 			continue;
 		}
 
@@ -1108,14 +1246,6 @@ start:
 			LOG_ERR("poll() returned an error: %d", err);
 			mqtt_cloud_evt.data.err = MQTT_CLOUD_DISCONNECT_MISC;
 			break;
-		}
-
-		if (atomic_get(&disconnect_requested)) {
-			atomic_set(&disconnect_requested, 0);
-			LOG_DBG("Expected disconnect event.");
-			mqtt_cloud_evt.data.err = MQTT_CLOUD_DISCONNECT_MISC;
-			mqtt_cloud_notify_event(&mqtt_cloud_evt);
-			goto reset;
 		}
 
 		if ((fds[0].revents & POLLNVAL) == POLLNVAL) {
@@ -1142,9 +1272,15 @@ start:
 		}
 	}
 
-
-	mqtt_cloud_notify_event(&mqtt_cloud_evt);
-	mqtt_cloud_disconnect();
+	/* Upon a socket error, disconnect the client and notify the
+	 * application. If the client has already been disconnected this has
+	 * occurred via a MQTT DISCONNECT event and the application has
+	 * already been notified.
+	 */
+	if (atomic_get(&mqtt_cloud_disconnected) == 0) {
+		mqtt_cloud_notify_event(&mqtt_cloud_evt);
+		mqtt_cloud_disconnect();
+	}
 
 reset:
 	atomic_set(&connection_poll_active, 0);
@@ -1155,7 +1291,7 @@ reset:
 #ifdef CONFIG_BOARD_QEMU_X86
 #define POLL_THREAD_STACK_SIZE 4096
 #else
-#define POLL_THREAD_STACK_SIZE 2560
+#define POLL_THREAD_STACK_SIZE 3072
 #endif
 K_THREAD_DEFINE(connection_poll_thread, POLL_THREAD_STACK_SIZE,
 		mqtt_cloud_cloud_poll, NULL, NULL, NULL,

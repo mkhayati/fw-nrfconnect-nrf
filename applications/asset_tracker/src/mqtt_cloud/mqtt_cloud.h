@@ -85,7 +85,12 @@ enum mqtt_cloud_evt_type {
 	MQTT_CLOUD_EVT_FOTA_ERASE_DONE,
 	/** FOTA progress notification. */
 	MQTT_CLOUD_EVT_FOTA_DL_PROGRESS,
-	/** MQTT Cloud library error. */
+	/** FOTA error. Used to propagate FOTA-related errors to the
+	 *  application. This is to distinguish between MQTT_CLOUD irrecoverable
+	 *  errors and FOTA errors, so they can be handled differently.
+	 */
+	MQTT_CLOUD_EVT_FOTA_ERROR,
+	/** MQTT Cloud library irrecoverable error. */
 	MQTT_CLOUD_EVT_ERROR
 };
 
