@@ -1038,6 +1038,7 @@ int mqtt_cloud_send(const struct mqtt_cloud_data *const tx_data)
 		tx_data_pub.topic.len = strlen(get_topic);
 		break;
 	case CLOUD_EP_STATE:
+	case CLOUD_EP_MSG:
 		tx_data_pub.topic.str = update_topic;
 		tx_data_pub.topic.len = strlen(update_topic);
 		break;
